@@ -20,6 +20,9 @@ tornado = "==6.4.1"
 typing_extensions = "==4.12.2"
 click = "==8.1.7"
 GitPython = "==3.1.43"
+watchdog = "5.0.2"
+fastapi = {extras = ["standard"], version = "*"}
+streamlit-aggrid = "*"
 
 [dev-packages]
 flake8 = "==7.1.1"
