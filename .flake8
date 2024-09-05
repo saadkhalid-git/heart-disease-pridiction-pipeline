@@ -12,5 +12,7 @@ max-function-length = 10
 min-function-length = 3
 
 # Add flake8-docstrings and flake8-annotations plugins (for docstrings and type hints)
-docstring-convention = google  # Use Google-style docstrings
-annotations-complete = True    # Ensure all functions use type hints
+# Use Google-style docstrings
+docstring-convention = google
+# Ensure all functions use type hints
+annotations-complete = True
