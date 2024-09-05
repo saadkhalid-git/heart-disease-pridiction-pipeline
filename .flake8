@@ -1,0 +1,16 @@
+[flake8]
+max-line-length = 88
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist
+
+# Enforce functions should not exceed 10 lines
+max-function-length = 10
+# Enforce functions should have at least 3 lines
+min-function-length = 3
+
+# Add flake8-docstrings and flake8-annotations plugins (for docstrings and type hints)
+docstring-convention = google  # Use Google-style docstrings
+annotations-complete = True    # Ensure all functions use type hints
