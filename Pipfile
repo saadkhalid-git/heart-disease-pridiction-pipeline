@@ -8,7 +8,7 @@ apache-airflow = {version = "==2.8.2", install_constraint = "https://raw.githubu
 streamlit = "==1.38.0"
 pre-commit = "==3.8.0"
 requests = "==2.32.3"
-numpy = "==2.0.2"
+numpy = "*"
 pandas = "==2.2.2"
 protobuf = "==4.25.4"
 pyarrow = "==17.0.0"

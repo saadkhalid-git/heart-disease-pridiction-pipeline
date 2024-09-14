@@ -168,3 +168,4 @@ airflow/airflow.db
 data/.DS_Store
 .DS_Store
 airflow/airflow-webserver.pid
+airflow/standalone_admin_password.txt
