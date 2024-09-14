@@ -161,7 +161,9 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-data/*/*.csv
+data/bad_data/*.csv
+data/good_data/*.csv
+data/raw_data/*.csv
 airflow/airflow.db
 data/.DS_Store
 .DS_Store
