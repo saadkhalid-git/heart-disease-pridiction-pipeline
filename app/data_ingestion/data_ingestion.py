@@ -16,10 +16,10 @@ def split_csv(file_path, num_files):
 
     # Save each chunk as a separate CSV
     for i, chunk in enumerate(chunks):
-        chunk.to_csv(f"output_file_{i+1}.csv", index=False)
+        chunk.to_csv(f"data/raw_data/output_file_{i+1}.csv", index=False)
         print(f"Created output_file_{i+1}.csv")
 
 
-file_path = "large_data.csv"  # Path to your large CSV file
-num_files = 2  # Set how many files you want
+file_path = "data/data.csv"  # Path to your large CSV file
+num_files = 10  # Set how many files you want
 split_csv(file_path, num_files)
