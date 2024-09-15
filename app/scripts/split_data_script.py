@@ -16,6 +16,6 @@ def split_csv(file_path, num_files):
         print(f"Created output_file_{i+1}.csv")
 
 
-file_path = "data/heart_disaease_data.csv"  # Path to your large CSV file
+file_path = "data/heart_disease_data.csv"  # Path to your large CSV file
 num_files = 10  # Set how many files you want
 split_csv(file_path, num_files)
