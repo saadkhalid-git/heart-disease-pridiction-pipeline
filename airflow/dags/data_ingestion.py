@@ -26,7 +26,7 @@ RAW_DATA_PATH = "data/raw_data"
 )
 def ingest_data():
     @task
-    def get_data_to_ingest_from_local_file() -> pd.DataFrame:
+    def read_data() -> pd.DataFrame:
         files = [
             file for file in os.listdir(RAW_DATA_PATH) if file.endswith(".csv")
         ]
@@ -45,14 +45,14 @@ def ingest_data():
         return data_to_ingest_df
 
     @task
-    def save_data(data_to_ingest_df: pd.DataFrame) -> None:
+    def save_file(data_to_ingest_df: pd.DataFrame) -> None:
         filepath = f'data/good_data/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.csv'
         logging.info(f"Ingesting data to the file: {filepath}")
 
         data_to_ingest_df.to_csv(filepath, index=False)
 
-    data_to_ingest = get_data_to_ingest_from_local_file()
-    save_data(data_to_ingest)
+    data_to_ingest = read_data()
+    save_file(data_to_ingest)
 
 
 ingest_data_dag = ingest_data()
