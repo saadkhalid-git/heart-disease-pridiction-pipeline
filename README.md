@@ -21,8 +21,8 @@ To set up the project, follow these steps:
 First, clone the repository to your local machine:
 
 ```bash
-git clone <repository-url>
-cd <repository-directory>
+git clone git@github.com:saadkhalid-git/heart-disease-pridiction-pipeline.git
+cd heart-disease-pridiction-pipeline
 ```
 
 ### 2. Set Up the Conda Environment
@@ -30,15 +30,15 @@ cd <repository-directory>
 Create and activate a Conda environment with the required Python version:
 
 ```bash
-conda create --name myenv python=3.12
-conda activate myenv
+conda create --name heart-disease-pridiction-pipeline python=3.12
+conda activate heart-disease-pridiction-pipeline
 ```
 
 Alternatively, you can create and activate the environment using a `environment.yml` file if provided:
 
 ```bash
 conda env create -f environment.yml
-conda activate myenv
+conda activate heart-disease-pridiction-pipeline
 ```
 
 ### 3. Install Dependencies Using Pipenv
