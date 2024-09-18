@@ -3,85 +3,52 @@ from __future__ import annotations
 import time
 
 import pandas as pd
+import requests
 import streamlit as st
 
-# Sample DataFrame based on the provided image
-data = {
-    "Id": [
-        "PT1000",
-        "PT1001",
-        "PT1002",
-        "PT1003",
-        "PT1004",
-        "PT1005",
-        "PT1006",
-        "PT1007",
-        "PT1008",
-        "PT1009",
-        "PT1010",
-    ],
-    "Age": [42, 54, 60, 54, 55, 59, 47, 49, 67, 63, 43],
-    "Gender": ["M", "M", "M", "M", "M", "M", "M", "M", "F", "M", "M"],
-    "ChestPainType": [
-        "ASY",
-        "NAP",
-        "ASY",
-        "ATA",
-        "ASY",
-        "ASY",
-        "NAP",
-        "ASY",
-        "NAP",
-        "ASY",
-        "ATA",
-    ],
-    "RestingBP": [120, 140, 141, 124, 160, 140, 108, 130, 152, 170, 142],
-    "Cholesterol": [198, 239, 316, 266, 292, 264, 243, 206, 277, 177, 207],
-    "FastingBS": [0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0],
-    "RestingECG": [
-        "Normal",
-        "Normal",
-        "ST",
-        "LVH",
-        "Normal",
-        "LVH",
-        "Normal",
-        "Normal",
-        "Normal",
-        "Normal",
-        "Normal",
-    ],
-    "MaxHR": [155, 160, 122, 109, 143, 119, 152, 170, 172, 84, 138],
-    "ExerciseAngina": ["N", "N", "Y", "Y", "N", "Y", "N", "N", "N", "Y", "N"],
-}
-df = pd.DataFrame(data)
 
-
-# Helper function to add a loading state
+# Helper function to simulate loading state
 def add_loading_state():
     with st.spinner("Applying filters..."):
-        time.sleep(2)
+        time.sleep(1)
+
+
+# Function to fetch data from the API
+def fetch_data_from_api():
+    try:
+        response = requests.get(
+            "http://localhost:8000/past-predictions"
+        )  # Replace with your API URL
+        response.raise_for_status()  # Raises an HTTPError for bad responses
+        data = response.json()
+        return pd.DataFrame(data)
+    except requests.RequestException as e:
+        st.error(f"Error fetching data: {e}")
+        return pd.DataFrame()
 
 
 # Main application
 def main():
     st.title("Heart Disease Prediction")
 
+    # Fetch data from API
+    df = fetch_data_from_api()
+
+    if df.empty:
+        st.warning("No data available.")
+        return
+
+    # Initialize df_filtered
+    df_filtered = df.copy()
+
     # Filter and Search Section
     with st.form(key="filter_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            start_date = st.date_input("Start Date", value=None)
-        with col2:
-            end_date = st.date_input("End Date", value=None)
-
         search_text = st.text_input("Search (any column)", "")
-
         apply_filter = st.form_submit_button("Apply Filter")
+
         if apply_filter:
             add_loading_state()
 
-            # Start filtering by search input
             if search_text:
                 df_filtered = df[
                     df.apply(
@@ -91,85 +58,60 @@ def main():
                         axis=1,
                     )
                 ]
-            else:
-                df_filtered = df.copy()  # No search applied, show all
-
-            # Date filtering logic: You can implement
-            # your own logic for date-based
-            if start_date and end_date:
-                st.write(
-                    f"Showing results for dates between {start_date} and {end_date}"
-                )
-            else:
-                st.write("No date filtering applied")
-
-        else:
-            df_filtered = df.copy()  # No filtering applied initially
 
     # Pagination setup
     items_per_page = 10
-    total_pages = len(df_filtered) // items_per_page + (
-        1 if len(df_filtered) % items_per_page > 0 else 0
-    )
+    total_pages = (len(df_filtered) + items_per_page - 1) // items_per_page
 
-    # Select current page
     if "current_page" not in st.session_state:
         st.session_state.current_page = 1
 
-    # Paginate dataframe
     start_idx = (st.session_state.current_page - 1) * items_per_page
     end_idx = start_idx + items_per_page
     df_paginated = df_filtered[start_idx:end_idx]
 
-    # Show the DataTable with full page width
+    # Display DataTable
     st.write(f"Page {st.session_state.current_page} of {total_pages}")
-    st.dataframe(df_paginated, width=1500)
+    st.dataframe(df_paginated)
 
-    # Update page on button click
-    col1, col2, col3 = st.columns(
-        [2, 6, 2]
-    )  # Adjusted column widths for button width
+    # Pagination buttons
+    col1, col2, col3 = st.columns([2, 6, 2])
     with col1:
-        if st.button("Previous"):
-            if st.session_state.current_page > 1:
-                st.session_state.current_page -= 1
+        if st.button("Previous") and st.session_state.current_page > 1:
+            st.session_state.current_page -= 1
     with col3:
-        if st.button("Next"):
-            if st.session_state.current_page < total_pages:
-                st.session_state.current_page += 1
+        if st.button("Next") and st.session_state.current_page < total_pages:
+            st.session_state.current_page += 1
 
     # Prediction Form Section
     st.header("Make a Prediction")
-    with st.form(key="prediction_form"):
-        # age = st.number_input("Age", min_value=0, max_value=120, value=25)
-        # gender = st.selectbox("Gender", ["M", "F"])
-        # chest_pain = st.selectbox(
-        #     "Chest Pain Type", ["ATA", "NAP", "ASY", "TA"]
-        # )
-        # resting_bp = st.number_input(
-        #     "Resting BP", min_value=0, max_value=250, value=120
-        # )
-        # cholesterol = st.number_input(
-        #     "Cholesterol", min_value=0, max_value=600, value=200
-        # )
-        # fasting_bs = st.selectbox(
-        #     "Fasting Blood Sugar > 120 mg/dl", ["Yes", "No"]
-        # )
-        # resting_ecg = st.selectbox("Resting ECG", ["Normal", "ST", "LVH"])
-        # max_hr = st.number_input(
-        #     "Max HR", min_value=50, max_value=220, value=150
-        # )
-        # exercise_angina = st.selectbox(
-        #     "Exercise Induced Angina", ["Yes", "No"]
-        # )
+    # with st.form(key="prediction_form"):
+    #     age = st.number_input("Age", min_value=0, max_value=120, value=25)
+    #     gender = st.selectbox("Gender", ["M", "F"])
+    #     chest_pain = st.selectbox(
+    #         "Chest Pain Type", ["ATA", "NAP", "ASY", "TA"]
+    #     )
+    #     resting_bp = st.number_input(
+    #         "Resting BP", min_value=0, max_value=250, value=120
+    #     )
+    #     cholesterol = st.number_input(
+    #         "Cholesterol", min_value=0, max_value=600, value=200
+    #     )
+    #     fasting_bs = st.selectbox(
+    #         "Fasting Blood Sugar > 120 mg/dl", ["Yes", "No"]
+    #     )
+    #     resting_ecg = st.selectbox("Resting ECG", ["Normal", "ST", "LVH"])
+    #     max_hr = st.number_input(
+    #         "Max HR", min_value=50, max_value=220, value=150
+    #     )
+    #     exercise_angina = st.selectbox(
+    #         "Exercise Induced Angina", ["Yes", "No"]
+    #     )
 
-        submit_prediction = st.form_submit_button("Submit Prediction")
-
-        if submit_prediction:
-            st.success("Prediction submitted successfully!")
-            # You can add your prediction logic here
+    #     submit_prediction = st.form_submit_button("Submit Prediction")
+    # if submit_prediction:
+    st.success("Prediction submitted successfully!")
 
 
-# Run the app
 if __name__ == "__main__":
     main()
