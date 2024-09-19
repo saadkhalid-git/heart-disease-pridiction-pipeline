@@ -83,6 +83,25 @@ def map_and_rename_columns(df):
     return df
 
 
+def reorder_columns(df):
+    column_order = [
+        "age",
+        "gender",
+        "chest_pain_type",
+        "resting_bp",
+        "cholesterol",
+        "fasting_bs",
+        "resting_ecg",
+        "max_hr",
+        "exercise_angina",
+        "old_peak",
+        "st_slope",
+        "heart_disease",
+    ]
+    df = df[column_order]
+    return df
+
+
 def snake_to_title(snake_str):
     components = snake_str.split("_")
     return " ".join(x.title() for x in components)
@@ -108,6 +127,7 @@ def make_prediction(data):
 
 
 def display_prediction_result(result):
+    print("resp->", result)
     if isinstance(result, pd.DataFrame):
         st.dataframe(result, use_container_width=True)
     else:
@@ -126,7 +146,9 @@ def main():
     st.title("Heart Disease Prediction")
     history, predict = st.tabs(["Prediction History", "Making a Prediction"])
     df = fetch_data_from_api()
+    df = reorder_columns(df)
     df.columns = [snake_to_title(col) for col in df.columns]
+
     with predict:
         # Option Selection (above the table)
         option = st.selectbox(
@@ -181,10 +203,8 @@ def main():
 
                     with st.spinner("Making prediction..."):
                         result = make_prediction(data)
-
-                    st.subheader("Prediction Result")
-
-                    display_prediction_result(result)
+                        st.subheader("Prediction Result")
+                        display_prediction_result(result)
 
         elif option == "Bulk Prediction":
             option = "Bulk Prediction"
@@ -200,10 +220,8 @@ def main():
 
                         with st.spinner("Making bulk predictions..."):
                             result = make_prediction(data)
-
-                        st.subheader("Prediction Results")
-
-                    display_prediction_result(result)
+                            st.subheader("Prediction Results")
+                            display_prediction_result(result)
 
     with history:
         # Filter and Search Section

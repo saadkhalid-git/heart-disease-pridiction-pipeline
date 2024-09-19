@@ -24,7 +24,7 @@ class Predictions(Base):
     resting_ecg = Column(String)
     max_hr = Column(Integer)
     exercise_angina = Column(String)
-    oldpeak = Column(Float)
+    old_peak = Column(Float)
     st_slope = Column(String)
     heart_disease = Column(Integer)
 

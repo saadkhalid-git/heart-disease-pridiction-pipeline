@@ -60,25 +60,21 @@ def convert_patient_data_to_dataframe(patient_data_list):
 @app.post("/predict")
 def predict(data: list[PatientData]):
     try:
-        # Convert the list of PatientData objects to a DataFrame
         patient_data_list = [PatientData(**item.dict()) for item in data]
         df = convert_patient_data_to_dataframe(patient_data_list)
 
-        # Check if DataFrame is empty or not
         if df.empty:
             raise HTTPException(status_code=400, detail="Empty data provided")
 
-        # Make predictions
         res = predictor.predict(df)
 
-        # Add predictions to DataFrame
         df["heart_disease"] = res["prediction"]
-        return df.to_dict(
-            orient="records"
-        )  # Convert DataFrame to list of dicts for response
+        predictions = df.to_dict(orient="records")
+        PredictionService.add_multiple(Predictions, predictions)
+        return predictions
 
     except Exception as e:
-        # Catch and return unexpected errors
+        print(e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
