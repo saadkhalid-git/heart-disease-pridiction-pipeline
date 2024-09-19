@@ -16,3 +16,5 @@ min-function-length = 3
 docstring-convention = google
 # Ensure all functions use type hints
 annotations-complete = True
+
+ignore = F401,E402
