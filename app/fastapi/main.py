@@ -35,9 +35,9 @@ class PatientData(BaseModel):
     fasting_bs: int
     resting_ecg: str
     max_hr: int
-    st_slope: str
-    old_peak: float
     exercise_angina: str
+    old_peak: float
+    st_slope: str
 
 
 data_store: list[PatientData] = []
@@ -59,24 +59,42 @@ def convert_patient_data_to_dataframe(patient_data_list):
 
 @app.post("/predict")
 def predict(data: list[PatientData]):
-    print(data)
-    patient_data_list = [PatientData(**item.dict()) for item in data]
+    try:
+        # Convert the list of PatientData objects to a DataFrame
+        patient_data_list = [PatientData(**item.dict()) for item in data]
+        df = convert_patient_data_to_dataframe(patient_data_list)
 
-    df = convert_patient_data_to_dataframe(patient_data_list)
-    print(df)
-    res = predictor.predict(df)
-    print(res)
-    return res
+        # Check if DataFrame is empty or not
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Empty data provided")
+
+        # Make predictions
+        res = predictor.predict(df)
+
+        # Add predictions to DataFrame
+        df["heart_disease"] = res["prediction"]
+        return df.to_dict(
+            orient="records"
+        )  # Convert DataFrame to list of dicts for response
+
+    except Exception as e:
+        # Catch and return unexpected errors
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/past-predictions")
 async def get_past_predictions():
-    # Fetch all past predictions from the database using the Prediction class
-    past_predictions = PredictionService.where(Predictions)
+    try:
+        # Fetch all past predictions from the database
+        past_predictions = PredictionService.where(Predictions)
 
-    if not past_predictions:
-        raise HTTPException(
-            status_code=404, detail="No past predictions found"
-        )
-    response = past_predictions
-    return response
+        if not past_predictions:
+            raise HTTPException(
+                status_code=404, detail="No past predictions found"
+            )
+
+        return past_predictions
+
+    except Exception as e:
+        # Catch and return unexpected errors
+        raise HTTPException(status_code=500, detail=str(e))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 from joblib import load
 from sqlalchemy.orm import Session
@@ -32,10 +33,12 @@ class Predictor:
 
     def predict(self, df):
         # Preprocess the DataFrame
-        print(df)
-        df_preprocessed = self.preprocess(df)
-
-        # Make predictions
-        print(df_preprocessed)
-        predictions = self.model.predict(df_preprocessed)
-        return predictions
+        numpy_array = self.preprocess(df)
+        try:
+            prediction = self.model.predict(numpy_array)
+            return {"prediction": prediction.tolist(), "status": 200}
+        except Exception as e:
+            return {
+                "err": "Error during test prediction:" + str(e),
+                "status": 400,
+            }

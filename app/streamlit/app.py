@@ -50,22 +50,35 @@ def validate_csv_columns(df):
 def map_and_rename_columns(df):
     # Define the mapping of old column names to new column names
     column_mapping = {
-        "Age": "age",
         "Gender": "gender",
         "ChestPainType": "chest_pain_type",
-        "RestingBP": "resting_bp",
-        "Cholesterol": "cholesterol",
-        "FastingBS": "fasting_bs",
         "RestingECG": "resting_ecg",
-        "MaxHR": "max_hr",
-        "ST_Slope": "st_slope",
         "ExerciseAngina": "exercise_angina",
+        "Cholesterol": "cholesterol",
+        "RestingBP": "resting_bp",
+        "MaxHR": "max_hr",
         "Oldpeak": "old_peak",
+        "ST_Slope": "st_slope",
+        "FastingBS": "fasting_bs",
+        "Age": "age",
     }
+    desired_order = [
+        "age",
+        "gender",
+        "chest_pain_type",
+        "resting_bp",
+        "cholesterol",
+        "fasting_bs",
+        "resting_ecg",
+        "max_hr",
+        "exercise_angina",
+        "old_peak",
+        "st_slope",
+    ]
     # Rename the columns
     df.rename(columns=column_mapping, inplace=True)
     df = df[list(column_mapping.values())]
-
+    df = df[desired_order]
     # Return the modified DataFrame
     return df
 
@@ -81,9 +94,9 @@ def make_prediction(data):
     api_url = "http://localhost:8000/predict"
 
     # Convert the data to JSON
+    print(data)
     json_data = json.dumps(data)
     # Send the request to the API
-    print(json_data)
     response = requests.post(
         api_url, data=json_data, headers={"Content-Type": "application/json"}
     )
@@ -92,6 +105,20 @@ def make_prediction(data):
         return response.json()
     else:
         return {"error": "Failed to get prediction from API"}
+
+
+def display_prediction_result(result):
+    if isinstance(result, pd.DataFrame):
+        st.dataframe(result, use_container_width=True)
+    else:
+        try:
+            result_df = pd.DataFrame(result)
+            result_df.columns = [
+                snake_to_title(col) for col in result_df.columns
+            ]
+            st.dataframe(result_df, use_container_width=True)
+        except Exception as e:
+            st.write("Error displaying result:", e)
 
 
 # Main application
@@ -121,8 +148,8 @@ def main():
                 cholesterol = st.number_input(
                     "Cholesterol", min_value=0, max_value=600, value=200
                 )
-                fasting_bs = st.selectbox(
-                    "Fasting Blood Sugar > 120 mg/dl", ["Y", "N"]
+                fasting_bs = st.number_input(
+                    "Fasting Blood Sugar > 120 mg/dl", value=0.0
                 )
                 resting_ecg = st.selectbox(
                     "Resting ECG", ["Normal", "ST", "LVH"]
@@ -131,7 +158,7 @@ def main():
                 max_hr = st.number_input(
                     "Max HR", min_value=50, max_value=220, value=150
                 )
-                old_peak = st.number_input("Old Peak", value=0)
+                old_peak = st.number_input("Old Peak", value=1.0)
                 exercise_angina = st.selectbox(
                     "Exercise Induced Angina", ["Y", "N"]
                 )
@@ -146,47 +173,38 @@ def main():
                             "fasting_bs": fasting_bs,
                             "resting_ecg": resting_ecg,
                             "max_hr": max_hr,
-                            "st_slope": st_slope,
-                            "old_peak": old_peak,
                             "exercise_angina": exercise_angina,
-                        }
+                            "old_peak": old_peak,
+                            "st_slope": st_slope,
+                        },
                     ]
 
-                    # Call the API with the single prediction data
-                    result = make_prediction(data)
+                    with st.spinner("Making prediction..."):
+                        result = make_prediction(data)
 
-                    st.write("Prediction Result:", result)
+                    st.subheader("Prediction Result")
+
+                    display_prediction_result(result)
 
         elif option == "Bulk Prediction":
             option = "Bulk Prediction"
-            # File uploader for CSV files
             uploaded_file = st.file_uploader("Upload CSV File", type="csv")
 
             if uploaded_file is not None:
                 if st.button("Submit Bulk Prediction"):
                     df = pd.read_csv(uploaded_file)
 
-                    # Validate the CSV file structure
                     if validate_csv_columns(df):
-                        # Convert the DataFrame to JSON format
                         df = map_and_rename_columns(df)
                         data = df.to_dict(orient="records")
 
-                        # Make the bulk prediction API call
-                        result = make_prediction(data)
+                        with st.spinner("Making bulk predictions..."):
+                            result = make_prediction(data)
 
-                        # Display the result in a DataTable
                         st.subheader("Prediction Results")
-                        st.write("Prediction Result:", result)
-                        # if isinstance(result, pd.DataFrame):
-                        #     st.dataframe(df)
-                        # else:
-                        #     result_df = pd.DataFrame(result)
-                        #     st.dataframe(result_df)
-                    else:
-                        st.error(
-                            "CSV file does not contain the required columns"
-                        )
+
+                    display_prediction_result(result)
+
     with history:
         # Filter and Search Section
         with st.form(key="filter_form"):
