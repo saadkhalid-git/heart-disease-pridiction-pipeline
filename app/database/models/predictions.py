@@ -27,7 +27,6 @@ class Predictions(Base):
     oldpeak = Column(Float)
     st_slope = Column(String)
     heart_disease = Column(Integer)
-    prediction = Column(Float)  # Column for prediction
 
     # Timestamps
     created_at = Column(DateTime, default=func.now(), nullable=False)
