@@ -11,9 +11,11 @@ import pandas as pd
 from airflow.decorators import dag
 from airflow.decorators import task
 from airflow.exceptions import AirflowSkipException
+from airflow.models import Variable
 from airflow.utils.dates import days_ago
 
 RAW_DATA_PATH = "data/raw_data"
+PROCESS_FILES_KEY = "process_files"
 
 
 @dag(
@@ -46,9 +48,15 @@ def ingest_data():
 
     @task
     def save_file(data_to_ingest_df: pd.DataFrame) -> None:
-        filepath = f'data/good_data/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.csv'
+        file_name = f'{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.csv'
+        filepath = f"data/good_data/{file_name}"
         logging.info(f"Ingesting data to the file: {filepath}")
-
+        files = Variable.get(
+            PROCESS_FILES_KEY, default_var=[], deserialize_json=True
+        )
+        files.append(file_name)
+        Variable.set(PROCESS_FILES_KEY, files, serialize_json=True)
+        logging.info(f"File {files} has been deleted after ingestion.")
         data_to_ingest_df.to_csv(filepath, index=False)
 
     data_to_ingest = read_data()
