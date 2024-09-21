@@ -16,8 +16,9 @@ from airflow.exceptions import AirflowSkipException
 from airflow.models import Variable
 from airflow.utils.dates import days_ago
 
-RAW_DATA_PATH = "data/raw_data"
-PROCESS_FILES_KEY = "process_files"
+RAW_DATA_PATH = os.getenv("GOOD_DATA_PATH") or "data/raw_data"
+PROCESSED_FILES_KEY = os.getenv("PROCESSED_FILES_KEY") or "process_files"
+API_URL = os.getenv("API_URL") or "http://localhost:8000/"
 
 
 @dag(
@@ -66,10 +67,10 @@ def ingest_data():
         filepath = f"data/good_data/{file_name}"
         logging.info(f"Ingesting data to the file: {filepath}")
         files = Variable.get(
-            PROCESS_FILES_KEY, default_var=[], deserialize_json=True
+            PROCESSED_FILES_KEY, default_var=[], deserialize_json=True
         )
         files.append(file_name)
-        Variable.set(PROCESS_FILES_KEY, files, serialize_json=True)
+        Variable.set(PROCESSED_FILES_KEY, files, serialize_json=True)
         data_to_ingest_df.to_csv(filepath, index=False)
 
     data_to_ingest = read_data()

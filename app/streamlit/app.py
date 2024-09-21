@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 
 import pandas as pd
 import requests
 import streamlit as st
+
+
+API_URL = os.getenv("API_URL") or "http://localhost:8000/"
 
 
 # Helper function to simulate loading state
@@ -17,7 +21,7 @@ def add_loading_state():
 
 def fetch_data_from_api():
     try:
-        response = requests.get("http://localhost:8000/past-predictions")
+        response = requests.get(API_URL + "past-predictions")
         response.raise_for_status()
         data = response.json()
         return pd.DataFrame(data)
@@ -97,7 +101,6 @@ def reorder_columns(df):
         "exercise_angina",
         "old_peak",
         "st_slope",
-        "heart_disease",
     ]
     df = df[column_order]
     return df
@@ -111,7 +114,7 @@ def snake_to_title(snake_str):
 # Function to make predictions
 def make_prediction(data):
     # Example API URL (replace with your actual endpoint)
-    api_url = "http://localhost:8000/predict"
+    api_url = API_URL + "predict"
 
     # Convert the data to JSON
     print(data)
