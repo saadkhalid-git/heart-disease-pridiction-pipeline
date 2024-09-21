@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import random
+import sys
 from datetime import datetime
 from datetime import timedelta
 
@@ -10,10 +11,13 @@ import pandas as pd
 
 from airflow.decorators import dag
 from airflow.decorators import task
+from airflow.exceptions import AirflowFailException
 from airflow.exceptions import AirflowSkipException
+from airflow.models import Variable
 from airflow.utils.dates import days_ago
 
 RAW_DATA_PATH = "data/raw_data"
+PROCESS_FILES_KEY = "process_files"
 
 
 @dag(
@@ -27,28 +31,45 @@ RAW_DATA_PATH = "data/raw_data"
 def ingest_data():
     @task
     def read_data() -> pd.DataFrame:
-        files = [
-            file for file in os.listdir(RAW_DATA_PATH) if file.endswith(".csv")
-        ]
+        try:
+            files = [
+                file
+                for file in os.listdir(RAW_DATA_PATH)
+                if file.endswith(".csv")
+            ]
+        except Exception as e:
+            raise AirflowFailException(f"Directory not found. {e}")
+
         if not files:
-            logging.info("No CSV files found in directory, skipping task.")
+            logging.info(
+                "No CSV files found in directory, skipping task.", sys.path
+            )
             raise AirflowSkipException("No CSV files found in directory.")
+        else:
+            selected_file = random.choice(files)
+            file_path = os.path.join(RAW_DATA_PATH, selected_file)
+            logging.info(f"Selected file: {file_path}")
 
-        selected_file = random.choice(files)
-        file_path = os.path.join(RAW_DATA_PATH, selected_file)
-        logging.info(f"Selected file: {file_path}")
+            data_to_ingest_df = pd.read_csv(file_path)
 
-        data_to_ingest_df = pd.read_csv(file_path)
-
-        os.remove(file_path)
-        logging.info(f"File {file_path} has been deleted after ingestion.")
-        return data_to_ingest_df
+            os.remove(file_path)
+            logging.info(f"File {file_path} has been deleted after ingestion.")
+            return data_to_ingest_df
 
     @task
     def save_file(data_to_ingest_df: pd.DataFrame) -> None:
-        filepath = f'data/good_data/{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.csv'
-        logging.info(f"Ingesting data to the file: {filepath}")
+        if data_to_ingest_df.empty:
+            logging.info("No data to ingest, skipping task.")
+            raise AirflowSkipException("No data to ingest.")
 
+        file_name = f'{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.csv'
+        filepath = f"data/good_data/{file_name}"
+        logging.info(f"Ingesting data to the file: {filepath}")
+        files = Variable.get(
+            PROCESS_FILES_KEY, default_var=[], deserialize_json=True
+        )
+        files.append(file_name)
+        Variable.set(PROCESS_FILES_KEY, files, serialize_json=True)
         data_to_ingest_df.to_csv(filepath, index=False)
 
     data_to_ingest = read_data()
