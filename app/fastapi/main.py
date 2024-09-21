@@ -84,11 +84,6 @@ async def get_past_predictions():
         # Fetch all past predictions from the database
         past_predictions = PredictionService.where(Predictions)
 
-        if not past_predictions:
-            raise HTTPException(
-                status_code=404, detail="No past predictions found"
-            )
-
         return past_predictions
 
     except Exception as e:

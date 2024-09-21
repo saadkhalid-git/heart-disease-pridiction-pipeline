@@ -11,7 +11,8 @@ import streamlit as st
 # Helper function to simulate loading state
 def add_loading_state():
     with st.spinner("Applying filters..."):
-        time.sleep(1)
+        time.sleep(2)
+        st.success("Filters applied!")
 
 
 def fetch_data_from_api():
@@ -146,8 +147,6 @@ def main():
     st.title("Heart Disease Prediction")
     history, predict = st.tabs(["Prediction History", "Making a Prediction"])
     df = fetch_data_from_api()
-    df = reorder_columns(df)
-    df.columns = [snake_to_title(col) for col in df.columns]
 
     with predict:
         # Option Selection (above the table)
@@ -225,6 +224,13 @@ def main():
 
     with history:
         # Filter and Search Section
+        if df.empty:
+            st.warning(
+                "No data available. Please make a prediction to view history."
+            )
+            return
+        df = reorder_columns(df)
+        df.columns = [snake_to_title(col) for col in df.columns]
         with st.form(key="filter_form"):
             col1, col2 = st.columns(2)
             with col1:
@@ -236,20 +242,20 @@ def main():
 
             apply_filter = st.form_submit_button("Apply Filter")
             if apply_filter:
-                add_loading_state()
+                # add_loading_state()
 
-                # Make a request to the FastAPI endpoint for filtering
-                response = requests.post(
-                    "http://localhost:8000/filter",
-                    json={
-                        "search_text": search_text,
-                        "start_date": start_date.isoformat()
-                        if start_date
-                        else None,
-                        "end_date": end_date.isoformat() if end_date else None,
-                    },
-                )
-                df_filtered = pd.DataFrame(response.json())
+                # # Make a request to the FastAPI endpoint for filtering
+                # response = requests.post(
+                #     "http://localhost:8000/filter",
+                #     json={
+                #         "search_text": search_text,
+                #         "start_date": start_date.isoformat()
+                #         if start_date
+                #         else None,
+                #         "end_date": end_date.isoformat() if end_date else None,
+                #     },
+                # )
+                # df_filtered = pd.DataFrame(response.json())
 
                 # Start filtering by search input
                 if search_text:

@@ -71,8 +71,9 @@ def check_and_predict():
             PROCESSED_FILES_KEY, default_var=[], deserialize_json=True
         )
         if len(processed_files) == 0:
-            logging.info("No new CSV files found to predict, skipping task.")
-            raise AirflowSkipException("No new CSV files found in directory.")
+            raise AirflowSkipException(
+                "No new CSV files found to predict, skipping task."
+            )
 
         current_files = [
             file
@@ -87,9 +88,6 @@ def check_and_predict():
 
     @task
     def make_prediction(files: list[str]) -> list[str]:
-        # Example API URL (replace with your actual endpoint)
-        processed_files = []
-
         for file in files:
             file_path = os.path.join(GOOD_DATA_PATH, file)
             df = pd.read_csv(file_path)
@@ -115,7 +113,7 @@ def check_and_predict():
                     f"Failed to get prediction from API for file {file}"
                 )
 
-        return processed_files
+        Variable.set(PROCESSED_FILES_KEY, json.dumps([]))
 
     # Task execution
     new_files_to_predict = check_for_new_data()
