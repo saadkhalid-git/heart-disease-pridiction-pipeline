@@ -29,7 +29,6 @@ class PredictionService:
 
     @staticmethod
     def add_multiple(model, data):
-        print("DB->", data)
         session = Session()
         try:
             # Assuming the model has a table name attribute

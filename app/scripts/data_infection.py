@@ -9,53 +9,76 @@ import pandas as pd
 df = pd.read_csv("data/heart_disease_data.csv")
 
 # Define the percentage of the dataset to infect (40%)
-infected_rows_count = int(len(df) * 0.4)
+infected_rows_count = int(len(df) * 1)
 rows_to_infect = random.sample(range(len(df)), infected_rows_count)
 
 
 # Helper function to apply multiple types of data corruption
-def apply_corruptions(df: pd.DataFrame, rows: list[int]) -> pd.DataFrame:
-    # Introduce missing values
+def apply_corruptions(df: pd.DataFrame, rows: list[int]) -> None:
+    print("Original Data (First 5 Rows):")
+    print(df.head())
+
+    # Apply and show each corruption
+    print("\n1. Missing Values:")
+    df_missing = df.copy()
     for row in rows:
-        col = random.choice(df.columns)
-        df.loc[row, col] = np.nan
+        col = random.choice(df_missing.columns)
+        df_missing.loc[row, col] = np.nan
+    print(df_missing.head())
 
-    # Introduce outliers in numerical columns
-    num_columns = df.select_dtypes(include=[np.number]).columns
-    for row in random.sample(rows, infected_rows_count // 5):
+    print("\n2. Outliers:")
+    df_outliers = df.copy()
+    num_columns = df_outliers.select_dtypes(include=[np.number]).columns
+    for row in random.sample(rows, len(rows) // 5):
         col = random.choice(num_columns)
-        df.loc[row, col] = df[col].mean() * 10
+        df_outliers.loc[row, col] = df_outliers[col].mean() * 10
+    print(df_outliers.head())
 
-    # Swap values between columns
-    for row in random.sample(rows, infected_rows_count // 5):
-        col1, col2 = random.sample(df.columns.tolist(), 2)
-        # Ensure values can be swapped
-        df.loc[row, [col1, col2]] = df.loc[row, [col2, col1]].values
+    print("\n3. Value Swapping:")
+    df_swapping = df.copy()
+    for row in random.sample(rows, len(rows) // 5):
+        col1, col2 = random.sample(df_swapping.columns.tolist(), 2)
+        df_swapping.loc[row, [col1, col2]] = df_swapping.loc[
+            row, [col2, col1]
+        ].values
+    print(df_swapping.head())
 
-    # Introduce inconsistent categories
-    cat_columns = df.select_dtypes(include=[object]).columns
-    for row in random.sample(rows, infected_rows_count // 5):
+    print("\n4. Inconsistent Categories:")
+    df_inconsistent = df.copy()
+    cat_columns = df_inconsistent.select_dtypes(include=[object]).columns
+    for row in random.sample(rows, len(rows) // 5):
         col = random.choice(cat_columns)
-        df.loc[row, col] = "INVALID"
+        df_inconsistent.loc[row, col] = "INVALID"
+    print(df_inconsistent.head())
 
-    # Add noise to numerical columns
-    for row in random.sample(rows, infected_rows_count // 5):
+    print("\n5. Noise Addition:")
+    df_noise = df.copy()
+    for row in random.sample(rows, len(rows) // 5):
         col = random.choice(num_columns)
-        if pd.api.types.is_numeric_dtype(df[col]):
-            noise = np.random.normal(0, 0.1 * df[col].mean())
-            df.loc[row, col] = df.loc[row, col] + noise
+        noise = np.random.normal(0, 0.1 * df_noise[col].mean())
+        df_noise.loc[row, col] += noise
+    print(df_noise.head())
 
-    # Insert random characters into categorical columns
-    for row in random.sample(rows, infected_rows_count // 5):
+    print("\n6. Random Characters in Categorical Columns:")
+    df_random_chars = df.copy()
+    for row in random.sample(rows, len(rows) // 5):
         col = random.choice(cat_columns)
         random_char = "".join(
             random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=3)
         )
-        df.loc[row, col] = (
-            str(df.loc[row, col]) + random_char
-        )  # Ensure value is string
+        df_random_chars.loc[row, col] = (
+            str(df_random_chars.loc[row, col]) + random_char
+        )
+    print(df_random_chars.head())
 
-    return df
+    print("\n7. Shuffling within Columns:")
+    df_shuffling = df.copy()
+    for row in random.sample(rows, len(rows) // 5):
+        col = random.choice(df_shuffling.columns)
+        df_shuffling[col] = (
+            df_shuffling[col].sample(frac=1).reset_index(drop=True)
+        )
+    print(df_shuffling.head())
 
 
 # Apply infections

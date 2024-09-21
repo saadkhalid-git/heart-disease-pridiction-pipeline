@@ -15,9 +15,9 @@ from airflow.exceptions import AirflowSkipException
 from airflow.models import Variable
 from airflow.utils.dates import days_ago
 
-GOOD_DATA_PATH = "data/good_data"
-PROCESSED_FILES_KEY = "process_files"
-API_URL = "http://localhost:8000/predict"
+GOOD_DATA_PATH = os.getenv("GOOD_DATA_PATH") or "data/good_data"
+PROCESSED_FILES_KEY = os.getenv("PROCESSED_FILES_KEY") or "process_files"
+API_URL = os.getenv("API_URL") or "http://localhost:8000/"
 
 
 def map_and_rename_columns(df):
@@ -99,7 +99,7 @@ def check_and_predict():
 
             # Send the request to the API
             response = requests.post(
-                API_URL,
+                API_URL + "predict",
                 data=json_data,
                 headers={"Content-Type": "application/json"},
             )

@@ -2,14 +2,13 @@
 # Project Setup
 
 ## Overview
-
-This project uses various Python packages to build and run a Streamlit application.
-The dependencies are managed using Pipenv and Conda for a hassle-free setup and environment management.
+Heat Disease Pridiction Pipeline
+The dependencies of the project are managed using Pipenv and Conda for a hassle-free setup and environment management.
 
 ## Prerequisites
 
-- Python 3.12
-- Conda (for environment management)
+- Python 3.9
+- pipenv (for environment management)
 - PostgreSQL (for database management)
 
 ## Installation
@@ -25,29 +24,25 @@ git clone git@github.com:saadkhalid-git/heart-disease-pridiction-pipeline.git
 cd heart-disease-pridiction-pipeline
 ```
 
-### 2. Set Up the Conda Environment
+### 2. Set Up the Pipenv Environment
 
-Create and activate a Conda environment with the required Python version:
-
-```bash
-conda create --name heart-disease-pridiction-pipeline python=3.12
-conda activate heart-disease-pridiction-pipeline
-```
-
-Alternatively, you can create and activate the environment using a `environment.yml` file if provided:
-
-```bash
-conda env create -f environment.yml
-conda activate heart-disease-pridiction-pipeline
-```
-
-### 3. Install Dependencies Using Pipenv
-
-Install Pipenv if you haven't already:
+Create and activate a pipenv environment with the required Python version:
 
 ```bash
 pip install pipenv
+pipenv --python 3.9
+pipenv shell
 ```
+
+Alternatively, you can create and activate the environment using conda for MAC users:
+
+```bash
+brew install pipenv
+pipenv shell
+pipenv --python 3.9
+```
+
+### 3. Install Dependencies Using Pipenv
 
 Use Pipenv to install the project dependencies specified in the `Pipfile`:
 
@@ -65,22 +60,47 @@ pipenv install --dev
 
 Make sure PostgreSQL is installed and running on your machine. You may need to create a database and configure your application to connect to it.
 
+## You need to set your database URL in the `app/config.env` against `DB_URL` variable
+
 ### 5. Run the Application
 
-After installing the dependencies, you can run the Streamlit application:
+To run all applications at once you need to install node and `pm2`
 
 ```bash
-streamlit run app.py
+npm install pm2 -g
+```
+Then
+
+```bash
+pm2 start ecosystem.config.js
 ```
 
-## Development
+To monitor logs
 
-For development purposes, you might need to use additional tools and configurations. Make sure to follow these steps:
+```bash
+pm2 logs
+```
 
-1. Install development dependencies:
 
-    ```bash
-    pipenv install --dev
-    ```
+After installing the dependencies, you can run the individually
 
-2. Run linters or other development tools as needed.
+Streamlit application:
+
+```bash
+streamlit run app/streamlit/app.py
+```
+
+FastAPI:
+
+```bash
+streamlit run app/fastapi/main.py
+```
+
+Airflow:
+
+You must in project root directory before runing below command
+
+```bash
+export AIRFLOW_HOME=${PWD}/airflow
+airflow standalone
+```
