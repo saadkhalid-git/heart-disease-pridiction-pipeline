@@ -1,0 +1,39 @@
+name: validation_checkpoint
+config_version: 1.0
+template_name:
+module_name: great_expectations.checkpoint
+class_name: SimpleCheckpoint
+run_name_template: '%Y%m%d-%H%M%S-my-run-name-template'
+expectation_suite_name:
+batch_request: {}
+action_list:
+  - name: store_validation_result
+    action:
+      class_name: StoreValidationResultAction
+  - name: store_evaluation_params
+    action:
+      class_name: StoreEvaluationParametersAction
+  - name: update_data_docs
+    action:
+      class_name: UpdateDataDocsAction
+evaluation_parameters: {}
+runtime_configuration: {}
+validations:
+  - batch_request:
+      datasource_name: my_datasource
+      data_connector_name: default_inferred_data_connector_name
+      data_asset_name: output_file_6.csv
+      data_connector_query:
+        index: -1
+    expectation_suite_name: heart_disease_validation_suite
+profilers: []
+# ge.set_logger_level("DEBUG")
+# result = context.run_checkpoint(checkpoint_name="validation_checkpoint",run_id="my_run_id_123",validation_config)
+
+# https://epitafr.webhook.office.com/webhookb2/a75c8ce0-9d6b-439b-8658-cfeb1f119679@3534b3d7-316c-4bc9-9ede-605c860f49d2/IncomingWebhook/d3a450064aba4749b9954dc984f21b30/34cf83e2-d429-4e20-9ca2-d0ac2c22a0a2/V2RfyAvESI2_e91ROEKSws4ebKcgD9uD5YTBpQ6gBAO_g1
+# result = context.run_validation_operator("validation_checkpoint",assets_to_validate=[{"batch_request": {"data_asset_name": file_name}}])
+# checkpoint_config['validations']['batch_request']['data_asset_name'] = file_name
+
+
+
+# result = context.run_checkpoint(checkpoint_name="validation_checkpoint",run_id="my_run_id_123",validations={"batch_request": {"data_asset_name": file_name}})
