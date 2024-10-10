@@ -23,11 +23,23 @@ from airflow.exceptions import AirflowSkipException
 from airflow.models import Variable
 from airflow.utils.dates import days_ago
 
+# Import Great Expectations
 
-RAW_DATA_PATH = os.getenv("GOOD_DATA_PATH") or "data/raw_data"
+# Define environment variables for paths
+RAW_DATA_PATH = os.getenv("RAW_DATA_PATH") or "data/raw_data"
+GOOD_DATA_PATH = os.getenv("GOOD_DATA_PATH") or "data/good_data"
+BAD_DATA_PATH = os.getenv("GOOD_DATA_PATH") or "data/bad_data"
+
+# Create directories if they don't exist
+os.makedirs(GOOD_DATA_PATH, exist_ok=True)
+os.makedirs(BAD_DATA_PATH, exist_ok=True)
+os.makedirs(RAW_DATA_PATH, exist_ok=True)
+
+# Define environment variables for configuration
 PROCESSED_FILES_KEY = os.getenv("PROCESSED_FILES_KEY") or "process_files"
 API_URL = os.getenv("API_URL") or "http://localhost:8000/"
 
+# great_expectations configuration
 ge_directory = os.getenv("GE_DIRECTORY") or "gx"
 ge_directory = os.path.abspath(ge_directory)
 context = gx.get_context(context_root_dir=ge_directory)
@@ -64,21 +76,22 @@ def ingest_data():
             file_path = os.path.join(RAW_DATA_PATH, selected_file)
             logging.info(f"Selected file: {file_path}")
 
-            data_to_ingest_df = pd.read_csv(file_path)
+            data_to_ingest_df_df = pd.read_csv(file_path)
+            data_to_ingest_df_df.attrs["file_name"] = selected_file
 
             os.remove(file_path)
             logging.info(f"File {file_path} has been deleted after ingestion.")
-            return data_to_ingest_df
+            return data_to_ingest_df_df
 
     @task
-    def validate_data(data_to_ingest_df: pd.DataFrame) -> dict:
+    def validate_data(data_to_ingest_df_df: pd.DataFrame):
         # run_id = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(gx.__version__)
+
         runtime_request = RuntimeBatchRequest(
             datasource_name="my_datasource",
             data_connector_name="default_runtime_data_connector_name",
             data_asset_name="my_runtime_asset_name",
-            runtime_parameters={"batch_data": data_to_ingest_df},
+            runtime_parameters={"batch_data": data_to_ingest_df_df},
             batch_identifiers={"default_identifier_name": "my_data"},
         )
         validator = context.get_validator(
@@ -88,14 +101,11 @@ def ingest_data():
         checkpoint_result = context.run_checkpoint(
             checkpoint_name="validation_checkpoint", validator=validator
         )
-        # print('checkpoint_result -> ', checkpoint_result)
         return checkpoint_result
 
     @task
     def send_alerts(checkpoint_result, webhook_url: str) -> None:
-        criticality = (
-            "high"  # Determine criticality based on validation results
-        )
+        criticality = "high"
         summary = checkpoint_result["statistics"]["errors_summary"]
         report_link = checkpoint_result["meta"].get(
             "validation_report_url", "N/A"
@@ -140,14 +150,15 @@ def ingest_data():
             )
 
     @task
-    def save_file(checkpoint_result, df, file_name) -> None:
-        # Define paths for saving the files
-        good_data_folder = "good_data"
-        bad_data_folder = "bad_data"
+    def save_file(checkpoint_result, data_to_ingest_df) -> None:
+        good_data_folder = GOOD_DATA_PATH
+        bad_data_folder = BAD_DATA_PATH
 
-        # Create directories if they don't exist
-        os.makedirs(good_data_folder, exist_ok=True)
-        os.makedirs(bad_data_folder, exist_ok=True)
+        default_file_name = (
+            f"default_{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.csv"
+        )
+        # Attempt to get the file name from DataFrame attributes (or another source)
+        file_name = data_to_ingest_df.attrs.get("file_name", default_file_name)
 
         # Collect all bad row indices from the validation result
         bad_row_indices = set()
@@ -158,40 +169,46 @@ def ingest_data():
                         expectation["result"]["unexpected_index_list"]
                     )
 
-        # Convert bad row indices to a list
-        bad_row_indices = list(bad_row_indices)
+        # Convert bad_row_indices to a sorted list and remove duplicates
+        bad_row_indices = sorted(set(bad_row_indices))
 
         # Split data into good and bad based on bad row indices
-        bad_data = df.iloc[bad_row_indices]
-        good_data = df.drop(bad_row_indices)
+        bad_data = data_to_ingest_df.iloc[list(bad_row_indices)]
+        good_data = data_to_ingest_df.drop(bad_row_indices)
 
-        # Save data based on the condition
-        if good_data.empty:
-            bad_data.to_csv(
-                os.path.join(bad_data_folder, file_name), index=False
-            )
-            print(
-                f"All rows have issues. Saved to {bad_data_folder}/{file_name}"
-            )
-        elif bad_data.empty:
-            good_data.to_csv(
-                os.path.join(good_data_folder, file_name), index=False
-            )
-            print(
-                f"All rows are good. Saved to {good_data_folder}/{file_name}"
-            )
-        else:
-            good_data.to_csv(
-                os.path.join(good_data_folder, file_name), index=False
-            )
-            bad_data.to_csv(
-                os.path.join(bad_data_folder, f"bad_{file_name}"), index=False
-            )
-            print(
-                "Split data into good and bad. Saved to"
-                f"{good_data_folder}/{file_name}"
-                f"and {bad_data_folder}/bad_{file_name}"
-            )
+        try:
+            # Save data based on the condition
+            if good_data.empty:
+                bad_data.to_csv(
+                    os.path.join(bad_data_folder, file_name), index=False
+                )
+                print(
+                    f"All rows have issues. Saved to {bad_data_folder}/{file_name}"
+                )
+            elif bad_data.empty:
+                good_data.to_csv(
+                    os.path.join(good_data_folder, file_name), index=False
+                )
+                print(
+                    f"All rows are good. Saved to {good_data_folder}/{file_name}"
+                )
+            else:
+                good_data_path = os.path.join(good_data_folder, file_name)
+                bad_data_path = os.path.join(
+                    bad_data_folder, f"bad_{file_name}"
+                )
+
+                good_data.to_csv(good_data_path, index=False)
+                bad_data.to_csv(bad_data_path, index=False)
+
+                print(
+                    f"Split data into good and bad.\n"
+                    f"Good data saved to: {good_data_path}\n"
+                    f"Bad data saved to: {bad_data_path}"
+                )
+
+        except Exception as e:
+            print(f"Error saving files: {e}")
 
     @task
     def save_statistics(checkpoint_result) -> None:
@@ -240,8 +257,9 @@ def ingest_data():
         #         drift_feature = result.get("drift_feature", None)
         #         drift_value = result.get("drift_value", None)
 
-    data_to_ingest = read_data()
-    validate_data(data_to_ingest)
+    data_to_ingest_df = read_data()
+    checkpoint_result = validate_data(data_to_ingest_df)
+    save_file(checkpoint_result, data_to_ingest_df)
 
 
 ingest_data_dag = ingest_data()
