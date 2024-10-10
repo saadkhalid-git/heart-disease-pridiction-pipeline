@@ -1,11 +1,10 @@
 name: validation_checkpoint
 config_version: 1.0
-template_name:
 module_name: great_expectations.checkpoint
 class_name: SimpleCheckpoint
 run_name_template: '%Y%m%d-%H%M%S-my-run-name-template'
-expectation_suite_name:
-batch_request: {}
+expectation_suite_name: heart_disease_validation_suite
+validations: []
 action_list:
   - name: store_validation_result
     action:
@@ -17,15 +16,13 @@ action_list:
     action:
       class_name: UpdateDataDocsAction
 evaluation_parameters: {}
-runtime_configuration: {}
-validations:
-  - batch_request:
-      datasource_name: my_datasource
-      data_connector_name: default_inferred_data_connector_name
-      data_asset_name: output_file_6.csv
-      data_connector_query:
-        index: -1
-    expectation_suite_name: heart_disease_validation_suite
+runtime_configuration:
+  result_format:
+    result_format: "COMPLETE"
+    unexpected_index_column_names: []
+    return_unexpected_index_query: True
+    include_unexpected_rows: False
+    partial_unexpected_index_list: True
 profilers: []
 # ge.set_logger_level("DEBUG")
 # result = context.run_checkpoint(checkpoint_name="validation_checkpoint",run_id="my_run_id_123",validation_config)
@@ -35,5 +32,82 @@ profilers: []
 # checkpoint_config['validations']['batch_request']['data_asset_name'] = file_name
 
 
+# result = context.run_checkpoint(checkpoint_name="validation_checkpoint",run_id="my_run_id_123",validations=validations)
+# validations = [{
+#     "batch_request": {
+#         "data_asset_name": "output_file_24.csv",
+#         "datasource_name": "my_datasource",
+#         "data_connector_name": "default_inferred_data_connector_name",
+#         "data_connector_query": {
+#             "index": -1
+#         }
+#     },
+#     "expectation_suite_name": "heart_disease_validation_suite"
+# }]
 
-# result = context.run_checkpoint(checkpoint_name="validation_checkpoint",run_id="my_run_id_123",validations={"batch_request": {"data_asset_name": file_name}})
+# context.run_checkpoint(
+#     checkpoint_name="validation_checkpoint",
+#     validations=[{
+#         "batch_request": {
+#             "data_asset_name": "output_file_7.csv"
+#         }
+#     }]
+# )
+
+# batch_kwargs = context.build_batch_kwargs(
+#     datasource="my_datasource",
+#     data_asset_name="output_file_7.csv"
+# )
+
+
+# batch_request = {
+#     "datasource_name": "my_datasource",
+#     "data_connector_name": "your_data_connector",
+#     "data_asset_name": "output_file_8.csv"
+# }
+
+# context.run_checkpoint(
+#     checkpoint_name="validation_checkpoint",
+#     validations=[{
+#         "batch_request": batch_request
+#     }]
+# )
+
+# context.run_checkpoint(
+#     checkpoint_name="validation_checkpoint",
+#     validations=[{
+#         "batch_request": {
+#             "data_asset_name": "output_file_6.csv"
+#         }
+#     }]
+# )
+
+
+# validator = context.sources.add_pandas("test").read_dataframe(
+#     df,
+#     asset_name="output_file_22.csv",
+# )
+
+# validations = [{
+#      "batch_request": {
+#          "datasource_name": "my_datasource",
+#          "data_connector_name": "default_inferred_data_connector_name",
+#          "data_asset_name": filename,
+#          "data_connector_query": {
+#              "index": -1
+#          }
+#      },
+#      "expectation_suite_name": "heart_disease_validation_suite"
+# }]
+
+# result = context.run_checkpoint(
+#     checkpoint_name="validation_checkpoint",
+#     validations=validations
+# )
+
+
+# batch_request = BatchRequest(
+#     datasource_name="my_datasource",
+#     data_connector_name="default_inferred_data_connector_name",
+#     data_asset_name="output_file_6.csv",
+# )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import random
@@ -9,7 +10,10 @@ from datetime import timedelta
 
 import great_expectations as gx
 import pandas as pd
+import requests
 from great_expectations.core.batch import BatchRequest
+from great_expectations.core.batch import RuntimeBatchRequest
+from great_expectations.data_context import DataContext
 from great_expectations.dataset.pandas_dataset import PandasDataset
 
 from airflow.decorators import dag
@@ -67,81 +71,174 @@ def ingest_data():
             return data_to_ingest_df
 
     @task
-    def validate_data(data_to_ingest_df: pd.DataFrame) -> None:
-        # expectation_suite = context.get_expectation_suite(expectation_suite_name)
-
-        # checkpoint = context.add_or_update_checkpoint
-        # (name="validation_checkpoint",validator=expectation_suite)
-        # validator = context.sources.add_pandas
-        # ("taxi_datasource").read_dataframe(
-        #     df, asset_name="taxi_frame",
-        # batch_metadata={"year": "2019", "month": "01"}
-        # )
-        # validator.save_expectation_suite()
-        # # this allows the checkpoint to reference the expectation suite
-
-        # checkpoint = context.add_or_update_checkpoint(
-        #     name="my_taxi_validator_checkpoint", validator=validator
-        # )
-
-        # checkpoint_result = checkpoint.run()
-        # ge_df = PandasDataset(data_to_ingest_df)
-        # ge_df._initialize_expectations(expectation_suite)
-        # validation_results = ge_df.validate()
-        # print('validation_results:', validation_results)
-        # context.run_checkpoint()
-        # if data_to_ingest_df.empty:
-        #     logging.info("No data to ingest, skipping task.")
-        #     raise AirflowSkipException("No data to ingest.")
-
-        # # data_asset_name = os.path.basename(file_path).split(".")[0]
-
-        # file_name = f'{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.csv'
-        # filepath = f"data/good_data/{file_name}"
-        # logging.info(f"Ingesting data to the file: {filepath}")
-        # files = Variable.get(
-        #     PROCESSED_FILES_KEY, default_var=[], deserialize_json=True
-        # )
-        # files.append(file_name)
-        # Variable.set(PROCESSED_FILES_KEY, files, serialize_json=True)
-        # data_to_ingest_df.to_csv(filepath, index=False)
-        return ""
-
-    @task
-    def send_alerts(data_to_ingest_df: pd.DataFrame) -> None:
-        if data_to_ingest_df.empty:
-            logging.info("No data to ingest, skipping task.")
-            raise AirflowSkipException("No data to ingest.")
-
-        file_name = f'{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.csv'
-        filepath = f"data/good_data/{file_name}"
-        logging.info(f"Ingesting data to the file: {filepath}")
-        files = Variable.get(
-            PROCESSED_FILES_KEY, default_var=[], deserialize_json=True
+    def validate_data(data_to_ingest_df: pd.DataFrame) -> dict:
+        # run_id = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(gx.__version__)
+        runtime_request = RuntimeBatchRequest(
+            datasource_name="my_datasource",
+            data_connector_name="default_runtime_data_connector_name",
+            data_asset_name="my_runtime_asset_name",
+            runtime_parameters={"batch_data": data_to_ingest_df},
+            batch_identifiers={"default_identifier_name": "my_data"},
         )
-        files.append(file_name)
-        Variable.set(PROCESSED_FILES_KEY, files, serialize_json=True)
-        data_to_ingest_df.to_csv(filepath, index=False)
-
-    @task
-    def save_file(data_to_ingest_df: pd.DataFrame) -> None:
-        if data_to_ingest_df.empty:
-            logging.info("No data to ingest, skipping task.")
-            raise AirflowSkipException("No data to ingest.")
-
-        file_name = f'{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.csv'
-        filepath = f"data/good_data/{file_name}"
-        logging.info(f"Ingesting data to the file: {filepath}")
-        files = Variable.get(
-            PROCESSED_FILES_KEY, default_var=[], deserialize_json=True
+        validator = context.get_validator(
+            batch_request=runtime_request,
+            expectation_suite_name=expectation_suite_name,
         )
-        files.append(file_name)
-        Variable.set(PROCESSED_FILES_KEY, files, serialize_json=True)
-        data_to_ingest_df.to_csv(filepath, index=False)
+        checkpoint_result = context.run_checkpoint(
+            checkpoint_name="validation_checkpoint", validator=validator
+        )
+        # print('checkpoint_result -> ', checkpoint_result)
+        return checkpoint_result
 
     @task
-    def save_statistics(data_to_ingest_df: pd.DataFrame) -> None:
-        return "ss"
+    def send_alerts(checkpoint_result, webhook_url: str) -> None:
+        criticality = (
+            "high"  # Determine criticality based on validation results
+        )
+        summary = checkpoint_result["statistics"]["errors_summary"]
+        report_link = checkpoint_result["meta"].get(
+            "validation_report_url", "N/A"
+        )
+
+        alert_message = {
+            "text": (
+                f"Data Quality Alert - "
+                f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            ),
+            "attachments": [
+                {
+                    "title": "Data Quality Issues Detected",
+                    "fields": [
+                        {
+                            "title": "Criticality",
+                            "value": criticality,
+                            "short": True,
+                        },
+                        {"title": "Summary", "value": summary, "short": False},
+                        {
+                            "title": "Link to Report",
+                            "value": report_link,
+                            "short": False,
+                        },
+                    ],
+                    "color": "#FF0000" if criticality == "high" else "#FFFF00",
+                }
+            ],
+        }
+
+        # Send alert to the teams channel using a webhook
+        response = requests.post(
+            webhook_url,
+            data=json.dumps(alert_message),
+            headers={"Content-Type": "application/json"},
+        )
+        if response.status_code != 200:
+            raise ValueError(
+                f"Request to Teams webhook failed with status code "
+                f"{response.status_code}, response: {response.text}"
+            )
+
+    @task
+    def save_file(checkpoint_result, df, file_name) -> None:
+        # Define paths for saving the files
+        good_data_folder = "good_data"
+        bad_data_folder = "bad_data"
+
+        # Create directories if they don't exist
+        os.makedirs(good_data_folder, exist_ok=True)
+        os.makedirs(bad_data_folder, exist_ok=True)
+
+        # Collect all bad row indices from the validation result
+        bad_row_indices = set()
+        for result in checkpoint_result["run_results"].values():
+            for expectation in result["validation_result"]["results"]:
+                if "unexpected_index_list" in expectation["result"]:
+                    bad_row_indices.update(
+                        expectation["result"]["unexpected_index_list"]
+                    )
+
+        # Convert bad row indices to a list
+        bad_row_indices = list(bad_row_indices)
+
+        # Split data into good and bad based on bad row indices
+        bad_data = df.iloc[bad_row_indices]
+        good_data = df.drop(bad_row_indices)
+
+        # Save data based on the condition
+        if good_data.empty:
+            bad_data.to_csv(
+                os.path.join(bad_data_folder, file_name), index=False
+            )
+            print(
+                f"All rows have issues. Saved to {bad_data_folder}/{file_name}"
+            )
+        elif bad_data.empty:
+            good_data.to_csv(
+                os.path.join(good_data_folder, file_name), index=False
+            )
+            print(
+                f"All rows are good. Saved to {good_data_folder}/{file_name}"
+            )
+        else:
+            good_data.to_csv(
+                os.path.join(good_data_folder, file_name), index=False
+            )
+            bad_data.to_csv(
+                os.path.join(bad_data_folder, f"bad_{file_name}"), index=False
+            )
+            print(
+                "Split data into good and bad. Saved to"
+                f"{good_data_folder}/{file_name}"
+                f"and {bad_data_folder}/bad_{file_name}"
+            )
+
+    @task
+    def save_statistics(checkpoint_result) -> None:
+        return
+        # file_name = checkpoint_result['run_id']
+        # ingestion_time = datetime.now()
+
+        # total_rows = 0
+        # valid_rows = 0
+        # invalid_rows = 0
+        # missing_values_rows = 0
+        # outlier_rows = 0
+        # invalid_format_rows = 0
+        # missing_features_rows = 0
+        # data_drift = False
+        # drift_feature = None
+        # drift_value = None
+
+        # # Loop through validation results
+        # for result in checkpoint_result["run_results"].values():
+        #     expectation_suite_name = result["expectation_suite_name"]
+        #     statistics = result["statistics"]
+
+        #     total_rows += statistics["evaluated_expectations"]
+        #     valid_rows += statistics["successful_expectations"]
+        #     invalid_rows += statistics["unsuccessful_expectations"]
+
+        #     # Check for specific errors
+        #     for validation_result in result["validation_result"]["results"]:
+        #         if "missing" in validation_result["expectation_config"][
+        # "expectation_type"].lower():
+        #             missing_values_rows += 1
+        #         if "outlier" in validation_result["expectation_config"]
+        # ["expectation_type"].lower():
+        #             outlier_rows += 1
+        #         if "invalid_format" in validation_result["expectation_config"]
+        # ["expectation_type"].lower():
+        #             invalid_format_rows += 1
+        #         if "missing_features" in validation_result["expectation_config"]
+        # ["expectation_type"].lower():
+        #             missing_features_rows += 1
+
+        #     # Data drift (if applicable)
+        #     if "data_drift" in result:
+        #         data_drift = True
+        #         drift_feature = result.get("drift_feature", None)
+        #         drift_value = result.get("drift_value", None)
 
     data_to_ingest = read_data()
     validate_data(data_to_ingest)

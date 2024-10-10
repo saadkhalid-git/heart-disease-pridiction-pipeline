@@ -27,7 +27,7 @@ datasources:
         default_regex:
           group_names:
             - data_asset_name
-          pattern: (.*)
+          pattern: (.+\.csv)$
       default_runtime_data_connector_name:
         class_name: RuntimeDataConnector
         module_name: great_expectations.datasource.data_connector
@@ -36,7 +36,7 @@ datasources:
             class_name: Asset
             module_name: great_expectations.datasource.data_connector.asset
             batch_identifiers:
-              - runtime_batch_identifier_name
+              - default_identifier_name
 
 # This config file supports variable substitution which enables: 1) keeping
 # secrets out of source control & 2) environment-based configuration changes
