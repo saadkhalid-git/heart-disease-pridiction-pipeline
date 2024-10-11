@@ -1,0 +1,420 @@
+{
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "grafana",
+            "uid": "-- Grafana --"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "id": 1,
+    "links": [],
+    "panels": [
+      {
+        "datasource": {
+          "default": true,
+          "type": "grafana-postgresql-datasource",
+          "uid": "be0kgy06hiqkga"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisBorderShow": false,
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "barWidthFactor": 0.6,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "linear",
+              "lineWidth": 1,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "auto",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "id": 4,
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "hidden",
+            "placement": "right",
+            "showLegend": false
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "be0kgy06hiqkga"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "SELECT\n    date_trunc('minute', created_at) - INTERVAL '1 minute' * (EXTRACT(minute FROM created_at)::integer % 10) AS time,\n    SUM(total_rows::integer) AS total_rows,\n    SUM(failed_rows::integer) AS total_failed_rows,\n    SUM(successful_expectations::integer) AS total_successful_expectations,\n    SUM(unsuccessful_expectations::integer) AS total_unsuccessful_expectations,\n    CASE\n        WHEN SUM(total_rows::integer) > 0 THEN (SUM(failed_rows::integer)::float / SUM(total_rows::integer)) * 100\n        ELSE 0\n    END AS failure_rate_percentage,\n    CASE\n        WHEN SUM(evaluated_expectations::integer) > 0 THEN (SUM(successful_expectations::integer)::float / SUM(evaluated_expectations::integer)) * 100\n        ELSE 0\n    END AS success_rate_percentage\nFROM error_stats\nWHERE\n    created_at BETWEEN $__timeFrom() AND $__timeTo()\nGROUP BY time\nORDER BY time;\n",
+            "refId": "A",
+            "sql": {
+              "columns": [
+                {
+                  "parameters": [],
+                  "type": "function"
+                }
+              ],
+              "groupBy": [
+                {
+                  "property": {
+                    "type": "string"
+                  },
+                  "type": "groupBy"
+                }
+              ],
+              "limit": 50
+            }
+          }
+        ],
+        "title": "Failure Rate and Success Rate Over Time",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "default": true,
+          "type": "grafana-postgresql-datasource",
+          "uid": "be0kgy06hiqkga"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "continuous-GrYlRd"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        },
+        "id": 2,
+        "options": {
+          "displayMode": "lcd",
+          "maxVizHeight": 300,
+          "minVizHeight": 0,
+          "minVizWidth": 8,
+          "namePlacement": "auto",
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "calcs": [],
+            "fields": "",
+            "values": true
+          },
+          "showUnfilled": true,
+          "sizing": "auto",
+          "valueMode": "color"
+        },
+        "pluginVersion": "11.2.2",
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "be0kgy06hiqkga"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "WITH expanded_errors AS (\n    SELECT\n        id,\n        criticality,\n        created_at,\n        jsonb_array_elements(error_details) AS error\n    FROM\n        error_stats\n)\nSELECT\n    e.criticality,\n    e.error->>'column' AS error_column,\n    e.error->>'expectation_type' AS expectation_type,\n    COUNT(*) AS occurrence_count,\n    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY e.criticality), 2) AS percentage_within_criticality\nFROM\n    expanded_errors e\nGROUP BY\n    e.criticality,\n    e.error->>'column',\n    e.error->>'expectation_type'\nORDER BY\n    e.criticality DESC,\n    occurrence_count DESC;\n",
+            "refId": "A",
+            "sql": {
+              "columns": [
+                {
+                  "parameters": [],
+                  "type": "function"
+                }
+              ],
+              "groupBy": [
+                {
+                  "property": {
+                    "type": "string"
+                  },
+                  "type": "groupBy"
+                }
+              ],
+              "limit": 50
+            }
+          }
+        ],
+        "title": "Error Occurrence Analysis by Criticality and Expectation Type",
+        "type": "bargauge"
+      },
+      {
+        "datasource": {
+          "default": true,
+          "type": "grafana-postgresql-datasource",
+          "uid": "be0kgy06hiqkga"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              }
+            },
+            "mappings": []
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        },
+        "id": 3,
+        "options": {
+          "displayLabels": [
+            "percent"
+          ],
+          "legend": {
+            "calcs": [],
+            "displayMode": "hidden",
+            "placement": "right",
+            "showLegend": false,
+            "values": []
+          },
+          "pieType": "pie",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "be0kgy06hiqkga"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "WITH total_records AS (\n    SELECT \n        created_at::date AS record_date,\n        COUNT(*) AS total_count\n    FROM \n        error_stats \n    GROUP BY \n        record_date\n),\ndaily_errors AS (\n    SELECT \n        created_at::date AS error_date,\n        COUNT(*) AS error_count\n    FROM \n        error_stats\n    GROUP BY \n        error_date\n)\nSELECT \n    tr.record_date,\n    COALESCE(de.error_count, 0) AS error_count,\n    tr.total_count,\n    (COALESCE(de.error_count, 0)::float / tr.total_count * 100) AS error_rate_percentage\nFROM \n    total_records tr\nLEFT JOIN \n    daily_errors de ON tr.record_date = de.error_date\nORDER BY \n    tr.record_date;\n",
+            "refId": "A",
+            "sql": {
+              "columns": [
+                {
+                  "parameters": [],
+                  "type": "function"
+                }
+              ],
+              "groupBy": [
+                {
+                  "property": {
+                    "type": "string"
+                  },
+                  "type": "groupBy"
+                }
+              ],
+              "limit": 50
+            }
+          }
+        ],
+        "title": "Error Rates Over Time",
+        "type": "piechart"
+      },
+      {
+        "datasource": {
+          "default": true,
+          "type": "grafana-postgresql-datasource",
+          "uid": "be0kgy06hiqkga"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        },
+        "id": 1,
+        "options": {
+          "minVizHeight": 75,
+          "minVizWidth": 495,
+          "orientation": "vertical",
+          "reduceOptions": {
+            "calcs": [],
+            "fields": "",
+            "values": true
+          },
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true,
+          "sizing": "auto"
+        },
+        "pluginVersion": "11.2.2",
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-postgresql-datasource",
+              "uid": "be0kgy06hiqkga"
+            },
+            "editorMode": "code",
+            "format": "table",
+            "rawQuery": true,
+            "rawSql": "WITH expanded_errors AS (\n    SELECT\n        id,\n        criticality,\n        created_at::date AS error_date,\n        jsonb_array_elements(error_details) AS error\n    FROM\n        error_stats\n),\nerror_counts AS (\n    SELECT\n        error_date,\n        CASE\n            WHEN error->>'column' = 'cholesterol' THEN 'Cholesterol'\n            WHEN error->>'column' = 'max_hr' THEN 'MaxHR'\n            WHEN error->>'column' = 'oldpeak' THEN 'Oldpeak'\n            ELSE error->>'column'\n        END AS error_column,\n        error->>'expectation_type' AS expectation_type,\n        COUNT(*) AS daily_count\n    FROM\n        expanded_errors\n    GROUP BY\n        error_date,\n        error_column,\n        expectation_type\n)\nSELECT\n    error_date,\n    error_column,\n    expectation_type,\n    daily_count,\n    AVG(daily_count) OVER (\n        PARTITION BY error_column, expectation_type\n        ORDER BY error_date\n        ROWS BETWEEN 6 PRECEDING AND CURRENT ROW\n    ) AS seven_day_avg\nFROM\n    error_counts\nORDER BY\n    error_date,\n    error_column,\n    expectation_type;\n",
+            "refId": "A",
+            "sql": {
+              "columns": [
+                {
+                  "parameters": [],
+                  "type": "function"
+                }
+              ],
+              "groupBy": [
+                {
+                  "property": {
+                    "type": "string"
+                  },
+                  "type": "groupBy"
+                }
+              ],
+              "limit": 50
+            }
+          }
+        ],
+        "title": "Daily Error Count and 7-Day Moving Average by Error Column and Expectation Type",
+        "type": "gauge"
+      }
+    ],
+    "refresh": "auto",
+    "schemaVersion": 39,
+    "tags": [],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": [
+        "5s",
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ]
+    },
+    "timezone": "browser",
+    "title": "hear_disease_pridiction",
+    "uid": "be0kki4xdbo5ca",
+    "version": 8,
+    "weekStart": ""
+  }
