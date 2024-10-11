@@ -111,6 +111,10 @@ def ingest_data():
     @task(execution_timeout=timedelta(minutes=30), multiple_outputs=True)
     def validate_data(data_to_ingest_df: pd.DataFrame):
         try:
+            # run_id = data_to_ingest_df.attrs.get("file_name", "default_file_name")
+            # run_id = run_id.replace(".csv", "")
+            # run_id = run_id + datetime.now()
+            # .strftime("%d-%m-%Y %H:%M:%S").replace(" ", "_")
             runtime_request = RuntimeBatchRequest(
                 datasource_name="my_datasource",
                 data_connector_name="default_runtime_data_connector_name",
@@ -302,7 +306,6 @@ def ingest_data():
     @task
     def save_statistics(checkpoint_result: dict) -> None:
         try:
-            # Correct the typo in variable name and access the first result identifier
             identifier = list(checkpoint_result["run_results"].keys())[0]
             run_identifier = checkpoint_result["run_results"][identifier]
             validation_result = run_identifier["validation_result"]
@@ -347,8 +350,9 @@ def ingest_data():
 
             # Prepare the data to insert into the database,
             # with safe access to row counts
+
             error_stats = {
-                "run_id": run_identifier.get("run_id", "N/A"),
+                "run_id": identifier,
                 "criticality": criticality,
                 "report_link": report_link,
                 "total_rows": stats.get("evaluated_row_count", 0),
