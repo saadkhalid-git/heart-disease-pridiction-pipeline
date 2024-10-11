@@ -56,7 +56,7 @@ expectation_suite_name = "heart_disease_validation_suite"
     dag_id="data_ingestion_dag",
     description="Ingest data from a file to another DAG",
     tags=["dsp", "data_ingestion"],
-    schedule=timedelta(minutes=1),
+    schedule=timedelta(minutes=5),
     start_date=days_ago(0),  # sets the starting point of the DAG
     max_active_runs=1,  # Ensure only one active run at a time
 )

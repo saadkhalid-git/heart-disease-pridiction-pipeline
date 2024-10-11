@@ -4,12 +4,12 @@ import http.client
 import json
 import logging
 import os
+import subprocess
 from datetime import datetime
 from datetime import timedelta
 from urllib.parse import urlparse
 
 import pandas as pd
-import requests
 
 from airflow.decorators import dag
 from airflow.decorators import task
@@ -62,7 +62,7 @@ def map_and_rename_columns(df):
     dag_id="prediction",
     description="Check the file and predict",
     tags=["dsp", "prediction"],
-    schedule_interval=timedelta(minutes=2),
+    schedule_interval=timedelta(minutes=5),
     start_date=days_ago(0),
     max_active_runs=1,
 )
@@ -99,39 +99,26 @@ def check_and_predict():
             # Convert the data to JSON
             json_data = json.dumps(data)
 
-            # Send the request to the API
-            parsed_url = urlparse(API_URL + "predict")
-            # host = parsed_url.netloc
-            path = parsed_url.path
+            curl_command = [
+                "curl",
+                "-X",
+                "POST",
+                API_URL + "predict",  # URL for the API
+                "-H",
+                "Content-Type: application/json",  # Set the headers
+                "-d",
+                json_data,  # Send the JSON data
+            ]
+            result = subprocess.run(
+                curl_command, capture_output=True, text=True
+            )
 
-            # Establish HTTPS connection
-            conn = http.client.HTTPConnection("localhost", 8000)
-
-            # Convert the data to JSON and encode it as bytes (for Python 3)
-            headers = {"Content-Type": "application/json"}
-            body = json.dumps(json_data).encode("utf-8")
-
-            # Send the POST request
-            conn.request("POST", path, body=body, headers=headers)
-
-            # Get the response
-            response = conn.getresponse()
-
-            # Check if the request was successful
-            if response.status == 200:
-                # Read and decode the response data
-                response_data = response.read().decode("utf-8")
-                prediction_result = json.loads(response_data)
-                logging.info(f"Prediction result: {prediction_result}")
-                Variable.set(PROCESSED_FILES_KEY, json.dumps([]))
+            if result.returncode == 0:
+                print("Curl request successful.")
+                print("Response:", result.stdout)
             else:
-                logging.error(
-                    f"Failed to get prediction from API for file {file}."
-                    f"Status code: {response.status}"
-                )
-
-            # Close the connection
-            conn.close()
+                print("Curl request failed.")
+                print("Error:", result.stderr)
 
     # Task execution
     new_files_to_predict = check_for_new_data()
