@@ -29,7 +29,7 @@ class Predictions(Base):
     heart_disease = Column(Integer)
 
     # Timestamps
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=True)
     updated_at = Column(
-        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+        DateTime, default=func.now(), onupdate=func.now(), nullable=True
     )

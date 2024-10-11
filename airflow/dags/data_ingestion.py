@@ -8,6 +8,8 @@ import random
 import sys
 from datetime import datetime
 from datetime import timedelta
+from os.path import abspath
+from os.path import dirname
 from urllib.parse import urlparse
 
 import great_expectations as gx
@@ -22,6 +24,16 @@ from airflow.exceptions import AirflowFailException
 from airflow.exceptions import AirflowSkipException
 from airflow.models import Variable
 from airflow.utils.dates import days_ago
+
+# Path appending
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+)
+
+
+# Import the DBService and ErrorStats model
+from app.database.db_service import DBService
+from app.database.models.error_stats import ErrorStats
 
 
 # Define environment variables for paths
@@ -53,7 +65,7 @@ expectation_suite_name = "heart_disease_validation_suite"
 
 
 @dag(
-    dag_id="data_ingestion_dag",
+    dag_id="data_ingestion_dag_9",
     description="Ingest data from a file to another DAG",
     tags=["dsp", "data_ingestion"],
     schedule=timedelta(minutes=5),
@@ -289,8 +301,79 @@ def ingest_data():
 
     @task
     def save_statistics(checkpoint_result: dict) -> None:
-        # Placeholder for saving statistics to DB or other storage
-        pass  # Implement saving logic as needed
+        try:
+            # Correct the typo in variable name and access the first result identifier
+            identifier = list(checkpoint_result["run_results"].keys())[0]
+            run_identifier = checkpoint_result["run_results"][identifier]
+            validation_result = run_identifier["validation_result"]
+
+            # Extract statistics and data docs
+            stats = validation_result["statistics"]
+            data_docs = run_identifier["actions_results"]["update_data_docs"]
+
+            # Initialize error details list
+            error_details = []
+
+            # Extracting statistics with defaults
+            evaluated_expectations = stats.get("evaluated_expectations", 0)
+            successful_expectations = stats.get("successful_expectations", 0)
+            unsuccessful_expectations = stats.get(
+                "unsuccessful_expectations", 0
+            )
+            criticality = "high" if unsuccessful_expectations > 0 else "low"
+            report_link = data_docs.get("local_site", "N/A")
+
+            # Loop through the expectations and gather error details for failed ones
+            expectation_results = validation_result["results"]
+            for index, expectation in enumerate(expectation_results):
+                if not expectation["success"]:
+                    error_details.append(
+                        {
+                            "expectation_number": index + 1,
+                            "column": expectation["expectation_config"][
+                                "kwargs"
+                            ].get("column", "N/A"),
+                            "expectation_type": expectation[
+                                "expectation_config"
+                            ].get("expectation_type", "N/A"),
+                            "unexpected_count": expectation["result"].get(
+                                "unexpected_count", "N/A"
+                            ),
+                            "unexpected_values": expectation["result"].get(
+                                "unexpected_list", []
+                            ),
+                        }
+                    )
+
+            # Prepare the data to insert into the database,
+            # with safe access to row counts
+            error_stats = {
+                "run_id": run_identifier.get("run_id", "N/A"),
+                "criticality": criticality,
+                "report_link": report_link,
+                "total_rows": stats.get("evaluated_row_count", 0),
+                "failed_rows": stats.get("failed_row_count", 0),
+                "evaluated_expectations": evaluated_expectations,
+                "unsuccessful_expectations": unsuccessful_expectations,
+                "successful_expectations": successful_expectations,
+                "error_details": json.dumps(error_details),
+                "updated_at": datetime.now(),
+                "created_at": datetime.now(),
+            }
+
+            print("error_stats ->", error_stats)
+
+            DBService.add_multiple(ErrorStats, [error_stats])
+
+        except KeyError as e:
+            print(f"KeyError: Missing key {str(e)} in checkpoint result.")
+            # Optionally, log the error or raise a custom exception
+        except TypeError as e:
+            print(f"TypeError: {str(e)} - Encountered issue with data types.")
+            # Optionally, log the error or raise a custom exception
+        except Exception as e:
+            print(f"An unexpected error occurred: {str(e)}")
+            # Optionally, log the error or raise a custom exception
 
     data_to_ingest_df = read_data()
     data = validate_data(data_to_ingest_df)

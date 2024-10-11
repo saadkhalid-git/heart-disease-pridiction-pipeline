@@ -27,7 +27,7 @@ class ErrorStats(Base):
     error_details = Column(JSON)
 
     # Timestamps
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=True)
     updated_at = Column(
-        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+        DateTime, default=func.now(), onupdate=func.now(), nullable=True
     )
