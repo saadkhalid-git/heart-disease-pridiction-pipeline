@@ -120,6 +120,8 @@ def check_and_predict():
                 print("Curl request failed.")
                 print("Error:", result.stderr)
 
+        Variable.set(PROCESSED_FILES_KEY, json.dumps([]))
+
     # Task execution
     new_files_to_predict = check_for_new_data()
     make_prediction(new_files_to_predict)
