@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import os
@@ -7,14 +8,13 @@ import random
 import sys
 from datetime import datetime
 from datetime import timedelta
+from urllib.parse import urlparse
 
 import great_expectations as gx
 import pandas as pd
 import requests
-from great_expectations.core.batch import BatchRequest
 from great_expectations.core.batch import RuntimeBatchRequest
 from great_expectations.data_context import DataContext
-from great_expectations.dataset.pandas_dataset import PandasDataset
 
 from airflow.decorators import dag
 from airflow.decorators import task
@@ -23,12 +23,11 @@ from airflow.exceptions import AirflowSkipException
 from airflow.models import Variable
 from airflow.utils.dates import days_ago
 
-# Import Great Expectations
 
 # Define environment variables for paths
 RAW_DATA_PATH = os.getenv("RAW_DATA_PATH") or "data/raw_data"
 GOOD_DATA_PATH = os.getenv("GOOD_DATA_PATH") or "data/good_data"
-BAD_DATA_PATH = os.getenv("GOOD_DATA_PATH") or "data/bad_data"
+BAD_DATA_PATH = os.getenv("BAD_DATA_PATH") or "data/bad_data"
 
 # Create directories if they don't exist
 os.makedirs(GOOD_DATA_PATH, exist_ok=True)
@@ -39,6 +38,13 @@ os.makedirs(RAW_DATA_PATH, exist_ok=True)
 PROCESSED_FILES_KEY = os.getenv("PROCESSED_FILES_KEY") or "process_files"
 API_URL = os.getenv("API_URL") or "http://localhost:8000/"
 
+WEBHOOK_URL = (
+    "https://epitafr.webhook.office.com/webhookb2/a75c8ce0-9d6b-439b-8658-"
+    "cfeb1f119679@3534b3d7-316c-4bc9-9ede-605c860f49d2/IncomingWebhook/"
+    "d3a450064aba4749b9954dc984f21b30/34cf83e2-d429-4e20-9ca2-d0ac2c22a0a2/"
+    "V2RfyAvESI2_e91ROEKSws4ebKcgD9uD5YTBpQ6gBAO_g1"
+)
+
 # great_expectations configuration
 ge_directory = os.getenv("GE_DIRECTORY") or "gx"
 ge_directory = os.path.abspath(ge_directory)
@@ -47,7 +53,7 @@ expectation_suite_name = "heart_disease_validation_suite"
 
 
 @dag(
-    dag_id="data_ingestion",
+    dag_id="data_ingestion_dag",
     description="Ingest data from a file to another DAG",
     tags=["dsp", "data_ingestion"],
     schedule=timedelta(minutes=1),
@@ -55,7 +61,7 @@ expectation_suite_name = "heart_disease_validation_suite"
     max_active_runs=1,  # Ensure only one active run at a time
 )
 def ingest_data():
-    @task
+    @task(execution_timeout=timedelta(minutes=30))
     def read_data() -> pd.DataFrame:
         try:
             files = [
@@ -72,84 +78,149 @@ def ingest_data():
             )
             raise AirflowSkipException("No CSV files found in directory.")
         else:
-            selected_file = random.choice(files)
-            file_path = os.path.join(RAW_DATA_PATH, selected_file)
-            logging.info(f"Selected file: {file_path}")
+            try:
+                selected_file = random.choice(files)
+                file_path = os.path.join(RAW_DATA_PATH, selected_file)
+                logging.info(f"Selected file: {file_path}")
 
-            data_to_ingest_df_df = pd.read_csv(file_path)
-            data_to_ingest_df_df.attrs["file_name"] = selected_file
+                data_to_ingest_df = pd.read_csv(file_path)
+                data_to_ingest_df.attrs["file_name"] = selected_file
 
-            os.remove(file_path)
-            logging.info(f"File {file_path} has been deleted after ingestion.")
-            return data_to_ingest_df_df
+                # os.remove(file_path)
 
-    @task
-    def validate_data(data_to_ingest_df_df: pd.DataFrame):
-        # run_id = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                logging.info(
+                    f"File {file_path} has been deleted after ingestion."
+                )
 
-        runtime_request = RuntimeBatchRequest(
-            datasource_name="my_datasource",
-            data_connector_name="default_runtime_data_connector_name",
-            data_asset_name="my_runtime_asset_name",
-            runtime_parameters={"batch_data": data_to_ingest_df_df},
-            batch_identifiers={"default_identifier_name": "my_data"},
-        )
-        validator = context.get_validator(
-            batch_request=runtime_request,
-            expectation_suite_name=expectation_suite_name,
-        )
-        checkpoint_result = context.run_checkpoint(
-            checkpoint_name="validation_checkpoint", validator=validator
-        )
-        return checkpoint_result
+                return data_to_ingest_df
+            except Exception as e:
+                raise AirflowFailException(f"Error reading file: {e}")
 
-    @task
-    def send_alerts(checkpoint_result, webhook_url: str) -> None:
-        criticality = "high"
-        summary = checkpoint_result["statistics"]["errors_summary"]
-        report_link = checkpoint_result["meta"].get(
-            "validation_report_url", "N/A"
-        )
+    @task(execution_timeout=timedelta(minutes=30), multiple_outputs=True)
+    def validate_data(data_to_ingest_df: pd.DataFrame):
+        try:
+            runtime_request = RuntimeBatchRequest(
+                datasource_name="my_datasource",
+                data_connector_name="default_runtime_data_connector_name",
+                data_asset_name="my_runtime_asset_name",
+                runtime_parameters={"batch_data": data_to_ingest_df},
+                batch_identifiers={"default_identifier_name": "my_data"},
+            )
+            validator = context.get_validator(
+                batch_request=runtime_request,
+                expectation_suite_name=expectation_suite_name,
+            )
+            checkpoint_result = context.run_checkpoint(
+                checkpoint_name="validation_checkpoint", validator=validator
+            )
 
+            logging.info(f"Checkpoint Result: {checkpoint_result}")
+
+            return {
+                "checkpoint_result": checkpoint_result.to_json_dict(),
+                "data_to_ingest": data_to_ingest_df,
+            }
+        except Exception as e:
+            raise AirflowFailException(f"Error validating data: {e}")
+
+    @task(execution_timeout=timedelta(minutes=30))
+    def send_alerts(checkpoint_result: dict, webhook_url: str) -> None:
+        # Extract relevant statistics and meta information from the result
+        results = list(checkpoint_result["run_results"].keys())[0]
+        run_indetifier = checkpoint_result["run_results"][results]
+        validation_result = run_indetifier["validation_result"]
+        stats = validation_result["statistics"]
+        data_docs = run_indetifier["actions_results"]["update_data_docs"]
+
+        evaluated_expectations = stats.get("evaluated_expectations", 0)
+        successful_expectations = stats.get("successful_expectations", 0)
+        unsuccessful_expectations = stats.get("unsuccessful_expectations", 0)
+        criticality = "high" if unsuccessful_expectations > 0 else "low"
+        print("results ->", data_docs["local_site"])
+        report_link = data_docs.get("local_site", "N/A")
+
+        # Build the alert message
         alert_message = {
-            "text": (
-                f"Data Quality Alert - "
-                f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            ),
-            "attachments": [
+            "@type": "MessageCard",
+            "@context": "http://schema.org/extensions",
+            "themeColor": "0076D7",
+            "summary": "Data Problem Alert",
+            "sections": [
                 {
-                    "title": "Data Quality Issues Detected",
-                    "fields": [
+                    "activityTitle": "Data Problem Alert",
+                    "activitySubtitle": "On heart disease pipeline",
+                    "activityImage": (
+                        "https://cdn-icons-png.flaticon.com/512/8730/8730487.png"
+                    ),
+                    "facts": [
+                        {"name": "Criticality", "value": criticality},
                         {
-                            "title": "Criticality",
-                            "value": criticality,
-                            "short": True,
+                            "name": "Evaluated Expectations",
+                            "value": str(evaluated_expectations),
                         },
-                        {"title": "Summary", "value": summary, "short": False},
                         {
-                            "title": "Link to Report",
-                            "value": report_link,
-                            "short": False,
+                            "name": "Unsuccessful Expectations",
+                            "value": str(unsuccessful_expectations),
                         },
+                        {
+                            "name": "successful_expectations",
+                            "value": str(successful_expectations),
+                        },
+                        {"name": "Link to Report", "value": report_link},
                     ],
-                    "color": "#FF0000" if criticality == "high" else "#FFFF00",
+                    "markdown": True,
+                }
+            ],
+            "potentialAction": [
+                {
+                    "@type": "OpenUri",
+                    "name": "View Full Report",
+                    "targets": [
+                        {
+                            "os": "default",
+                            "uri": report_link,
+                        }
+                    ],
                 }
             ],
         }
+        print("alert_message ->", alert_message)
 
         # Send alert to the teams channel using a webhook
-        response = requests.post(
-            webhook_url,
-            data=json.dumps(alert_message),
-            headers={"Content-Type": "application/json"},
-        )
-        if response.status_code != 200:
-            raise ValueError(
-                f"Request to Teams webhook failed with status code "
-                f"{response.status_code}, response: {response.text}"
-            )
 
-    @task
+        try:
+            # Parse the URL into its components
+            parsed_url = urlparse(webhook_url)
+            host = parsed_url.netloc
+            path = parsed_url.path
+
+            # Establish HTTPS connection
+            conn = http.client.HTTPSConnection(host)
+
+            # Convert the message to JSON
+            headers = {"Content-type": "application/json"}
+            json_data = json.dumps(alert_message)
+
+            # Send the POST request
+            conn.request("POST", path, body=json_data, headers=headers)
+
+            # Get the response
+            response = conn.getresponse()
+
+            if response.status == 200:
+                print("Alert sent to Teams successfully.")
+            else:
+                print(
+                    f"Failed to send alert to Teams. Status code: {response.status}"
+                )
+
+            # Close the connection
+            conn.close()
+
+        except Exception as e:
+            print(f"Error sending alert to Teams: {e}")
+
+    @task(execution_timeout=timedelta(minutes=30))
     def save_file(checkpoint_result, data_to_ingest_df) -> None:
         good_data_folder = GOOD_DATA_PATH
         bad_data_folder = BAD_DATA_PATH
@@ -157,7 +228,7 @@ def ingest_data():
         default_file_name = (
             f"default_{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.csv"
         )
-        # Attempt to get the file name from DataFrame attributes (or another source)
+
         file_name = data_to_ingest_df.attrs.get("file_name", default_file_name)
 
         # Collect all bad row indices from the validation result
@@ -175,6 +246,12 @@ def ingest_data():
         # Split data into good and bad based on bad row indices
         bad_data = data_to_ingest_df.iloc[list(bad_row_indices)]
         good_data = data_to_ingest_df.drop(bad_row_indices)
+        files = Variable.get(
+            PROCESSED_FILES_KEY, default_var=[], deserialize_json=True
+        )
+        if not good_data.empty:
+            files.append(file_name)
+            Variable.set(PROCESSED_FILES_KEY, files, serialize_json=True)
 
         try:
             # Save data based on the condition
@@ -182,14 +259,14 @@ def ingest_data():
                 bad_data.to_csv(
                     os.path.join(bad_data_folder, file_name), index=False
                 )
-                print(
+                logging.info(
                     f"All rows have issues. Saved to {bad_data_folder}/{file_name}"
                 )
             elif bad_data.empty:
                 good_data.to_csv(
                     os.path.join(good_data_folder, file_name), index=False
                 )
-                print(
+                logging.info(
                     f"All rows are good. Saved to {good_data_folder}/{file_name}"
                 )
             else:
@@ -201,65 +278,25 @@ def ingest_data():
                 good_data.to_csv(good_data_path, index=False)
                 bad_data.to_csv(bad_data_path, index=False)
 
-                print(
+                logging.info(
                     f"Split data into good and bad.\n"
                     f"Good data saved to: {good_data_path}\n"
                     f"Bad data saved to: {bad_data_path}"
                 )
 
         except Exception as e:
-            print(f"Error saving files: {e}")
+            raise AirflowFailException(f"Error saving files: {e}")
 
     @task
-    def save_statistics(checkpoint_result) -> None:
-        return
-        # file_name = checkpoint_result['run_id']
-        # ingestion_time = datetime.now()
-
-        # total_rows = 0
-        # valid_rows = 0
-        # invalid_rows = 0
-        # missing_values_rows = 0
-        # outlier_rows = 0
-        # invalid_format_rows = 0
-        # missing_features_rows = 0
-        # data_drift = False
-        # drift_feature = None
-        # drift_value = None
-
-        # # Loop through validation results
-        # for result in checkpoint_result["run_results"].values():
-        #     expectation_suite_name = result["expectation_suite_name"]
-        #     statistics = result["statistics"]
-
-        #     total_rows += statistics["evaluated_expectations"]
-        #     valid_rows += statistics["successful_expectations"]
-        #     invalid_rows += statistics["unsuccessful_expectations"]
-
-        #     # Check for specific errors
-        #     for validation_result in result["validation_result"]["results"]:
-        #         if "missing" in validation_result["expectation_config"][
-        # "expectation_type"].lower():
-        #             missing_values_rows += 1
-        #         if "outlier" in validation_result["expectation_config"]
-        # ["expectation_type"].lower():
-        #             outlier_rows += 1
-        #         if "invalid_format" in validation_result["expectation_config"]
-        # ["expectation_type"].lower():
-        #             invalid_format_rows += 1
-        #         if "missing_features" in validation_result["expectation_config"]
-        # ["expectation_type"].lower():
-        #             missing_features_rows += 1
-
-        #     # Data drift (if applicable)
-        #     if "data_drift" in result:
-        #         data_drift = True
-        #         drift_feature = result.get("drift_feature", None)
-        #         drift_value = result.get("drift_value", None)
+    def save_statistics(checkpoint_result: dict) -> None:
+        # Placeholder for saving statistics to DB or other storage
+        pass  # Implement saving logic as needed
 
     data_to_ingest_df = read_data()
-    checkpoint_result = validate_data(data_to_ingest_df)
-    save_file(checkpoint_result, data_to_ingest_df)
+    data = validate_data(data_to_ingest_df)
+    save_file(data["checkpoint_result"], data["data_to_ingest"])
+    send_alerts(data["checkpoint_result"], WEBHOOK_URL)
+    save_statistics(data["checkpoint_result"])
 
 
 ingest_data_dag = ingest_data()

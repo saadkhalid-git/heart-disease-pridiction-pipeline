@@ -18,7 +18,7 @@ from pydantic import BaseModel
 d = dirname(dirname(abspath("__file__")))
 sys.path.append(d)
 
-from database.prediction_service import PredictionService
+from database.db_service import DBService
 from database.models.predictions import Predictions
 
 from ml_models.predictor import Predictor
@@ -70,7 +70,7 @@ def predict(data: list[PatientData]):
 
         df["heart_disease"] = res["prediction"]
         predictions = df.to_dict(orient="records")
-        PredictionService.add_multiple(Predictions, predictions)
+        DBService.add_multiple(Predictions, predictions)
         return predictions
 
     except Exception as e:
@@ -82,7 +82,7 @@ def predict(data: list[PatientData]):
 async def get_past_predictions():
     try:
         # Fetch all past predictions from the database
-        past_predictions = PredictionService.where(Predictions)
+        past_predictions = DBService.where(Predictions)
 
         return past_predictions
 

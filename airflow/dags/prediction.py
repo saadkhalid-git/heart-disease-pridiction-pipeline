@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import os
 from datetime import datetime
 from datetime import timedelta
+from urllib.parse import urlparse
 
 import pandas as pd
 import requests
@@ -98,22 +100,38 @@ def check_and_predict():
             json_data = json.dumps(data)
 
             # Send the request to the API
-            response = requests.post(
-                API_URL + "predict",
-                data=json_data,
-                headers={"Content-Type": "application/json"},
-            )
+            parsed_url = urlparse(API_URL + "predict")
+            # host = parsed_url.netloc
+            path = parsed_url.path
 
-            if response.status_code == 200:
-                prediction_result = response.json()
+            # Establish HTTPS connection
+            conn = http.client.HTTPConnection("localhost", 8000)
+
+            # Convert the data to JSON and encode it as bytes (for Python 3)
+            headers = {"Content-Type": "application/json"}
+            body = json.dumps(json_data).encode("utf-8")
+
+            # Send the POST request
+            conn.request("POST", path, body=body, headers=headers)
+
+            # Get the response
+            response = conn.getresponse()
+
+            # Check if the request was successful
+            if response.status == 200:
+                # Read and decode the response data
+                response_data = response.read().decode("utf-8")
+                prediction_result = json.loads(response_data)
                 logging.info(f"Prediction result: {prediction_result}")
-
+                Variable.set(PROCESSED_FILES_KEY, json.dumps([]))
             else:
                 logging.error(
-                    f"Failed to get prediction from API for file {file}"
+                    f"Failed to get prediction from API for file {file}."
+                    f"Status code: {response.status}"
                 )
 
-        Variable.set(PROCESSED_FILES_KEY, json.dumps([]))
+            # Close the connection
+            conn.close()
 
     # Task execution
     new_files_to_predict = check_for_new_data()

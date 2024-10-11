@@ -18,3 +18,9 @@ if not table_exists(engine, "Predictions"):
     print("Tables created successfully.")
 else:
     print("Table 'Predictions' already exists.")
+
+if not table_exists(engine, "ErrorStats"):
+    Base.metadata.create_all(engine)
+    print("Tables created successfully.")
+else:
+    print("Table 'ErrorStats' already exists.")
