@@ -19,7 +19,11 @@ env_path = "config/development.env"
 load_dotenv(env_path)
 
 # Database configuration
-DB_URL = os.getenv("DB_URL")
+fallback_db_url = (
+    "postgresql://saadkhalid:Password1@localhost:5432/"
+    "heart_disease_pridiction_pipeline"
+)
+DB_URL = os.getenv("DB_URL") or fallback_db_url
 
 # Ensure DB_URL is loaded from environment variables
 if not DB_URL:

@@ -65,7 +65,7 @@ expectation_suite_name = "heart_disease_validation_suite"
 
 
 @dag(
-    dag_id="data_ingestion_dag_9",
+    dag_id="data_ingestion_dag",
     description="Ingest data from a file to another DAG",
     tags=["dsp", "data_ingestion"],
     schedule=timedelta(minutes=5),
@@ -98,7 +98,7 @@ def ingest_data():
                 data_to_ingest_df = pd.read_csv(file_path)
                 data_to_ingest_df.attrs["file_name"] = selected_file
 
-                # os.remove(file_path)
+                os.remove(file_path)
 
                 logging.info(
                     f"File {file_path} has been deleted after ingestion."
