@@ -11,15 +11,19 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # Path appending
-d = dirname(dirname(abspath("__file__")))
+d = dirname(abspath("__file__"))
 sys.path.append(d)
 
 # Load environment variables from the .env file
-env_path = "../../config/.env"
+env_path = "config/development.env"
 load_dotenv(env_path)
 
 # Database configuration
-DB_URL = os.getenv("DB_URL")
+fallback_db_url = (
+    "postgresql://saadkhalid:Password1@localhost:5432/"
+    "heart_disease_pridiction_pipeline"
+)
+DB_URL = os.getenv("DB_URL") or fallback_db_url
 
 # Ensure DB_URL is loaded from environment variables
 if not DB_URL:

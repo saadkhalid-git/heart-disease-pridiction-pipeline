@@ -17,5 +17,5 @@ def split_csv(file_path, num_files):
 
 
 file_path = "data/heart_disease_data.csv"  # Path to your large CSV file
-num_files = 2  # Set how many files you want
+num_files = 25  # Set how many files you want
 split_csv(file_path, num_files)

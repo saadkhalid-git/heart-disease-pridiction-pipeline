@@ -8,13 +8,13 @@ import pandas as pd
 # Load the CSV file
 df = pd.read_csv("data/heart_disease_data.csv")
 
-# Define the percentage of the dataset to infect (40%)
-infected_rows_count = int(len(df) * 1)
+# Define the percentage of the dataset to infect (100%)
+infected_rows_count = int(len(df) * 1)  # Adjust this percentage as needed
 rows_to_infect = random.sample(range(len(df)), infected_rows_count)
 
 
 # Helper function to apply multiple types of data corruption
-def apply_corruptions(df: pd.DataFrame, rows: list[int]) -> None:
+def apply_corruptions(df: pd.DataFrame, rows: list[int]) -> pd.DataFrame:
     print("Original Data (First 5 Rows):")
     print(df.head())
 
@@ -79,6 +79,22 @@ def apply_corruptions(df: pd.DataFrame, rows: list[int]) -> None:
             df_shuffling[col].sample(frac=1).reset_index(drop=True)
         )
     print(df_shuffling.head())
+
+    # Combine all corrupted DataFrames (this can be adjusted based on desired logic)
+    combined_df = pd.concat(
+        [
+            df_missing,
+            df_outliers,
+            df_swapping,
+            df_inconsistent,
+            df_noise,
+            df_random_chars,
+            df_shuffling,
+        ],
+        ignore_index=True,
+    ).drop_duplicates()
+
+    return combined_df  # Return the final DataFrame
 
 
 # Apply infections

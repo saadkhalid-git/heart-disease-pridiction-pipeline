@@ -1,0 +1,26 @@
+name: validation_checkpoint
+config_version: 1.0
+module_name: great_expectations.checkpoint
+class_name: SimpleCheckpoint
+run_name_template: '%Y%m%d-%H%M%S-my-run-name-template'
+expectation_suite_name: heart_disease_validation_suite
+validations: []
+action_list:
+  - name: store_validation_result
+    action:
+      class_name: StoreValidationResultAction
+  - name: store_evaluation_params
+    action:
+      class_name: StoreEvaluationParametersAction
+  - name: update_data_docs
+    action:
+      class_name: UpdateDataDocsAction
+evaluation_parameters: {}
+runtime_configuration:
+  result_format:
+    result_format: "COMPLETE"
+    unexpected_index_column_names: []
+    return_unexpected_index_query: True
+    include_unexpected_rows: False
+    partial_unexpected_index_list: True
+profilers: []
