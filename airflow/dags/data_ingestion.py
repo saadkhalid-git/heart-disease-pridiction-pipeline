@@ -151,7 +151,14 @@ def ingest_data():
         evaluated_expectations = stats.get("evaluated_expectations", 0)
         successful_expectations = stats.get("successful_expectations", 0)
         unsuccessful_expectations = stats.get("unsuccessful_expectations", 0)
-        criticality = "high" if unsuccessful_expectations > 0 else "low"
+
+        if unsuccessful_expectations == 1:
+            criticality = "low"
+        elif unsuccessful_expectations <= 2:
+            criticality = "medium"
+        else:
+            criticality = "high"
+
         print("results ->", data_docs["local_site"])
         report_link = data_docs.get("local_site", "N/A")
 
@@ -171,15 +178,15 @@ def ingest_data():
                     "facts": [
                         {"name": "Criticality", "value": criticality},
                         {
-                            "name": "Evaluated Expectations",
+                            "name": "Evaluated Expectations:",
                             "value": str(evaluated_expectations),
                         },
                         {
-                            "name": "Unsuccessful Expectations",
+                            "name": "Unsuccessful Expectations:",
                             "value": str(unsuccessful_expectations),
                         },
                         {
-                            "name": "successful_expectations",
+                            "name": "Successful Expectations:",
                             "value": str(successful_expectations),
                         },
                         {"name": "Link to Report", "value": report_link},
@@ -323,7 +330,14 @@ def ingest_data():
             unsuccessful_expectations = stats.get(
                 "unsuccessful_expectations", 0
             )
-            criticality = "high" if unsuccessful_expectations > 0 else "low"
+
+            if unsuccessful_expectations == 1:
+                criticality = "low"
+            elif unsuccessful_expectations <= 2:
+                criticality = "medium"
+            else:
+                criticality = "high"
+
             report_link = data_docs.get("local_site", "N/A")
 
             # Loop through the expectations and gather error details for failed ones
@@ -348,9 +362,7 @@ def ingest_data():
                         }
                     )
 
-            # Prepare the data to insert into the database,
-            # with safe access to row counts
-
+            # error_stats object to insert into the database,
             error_stats = {
                 "run_id": identifier,
                 "criticality": criticality,
