@@ -11,11 +11,11 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # Path appending
-d = dirname(dirname(abspath("__file__")))
+d = dirname(abspath("__file__"))
 sys.path.append(d)
 
 # Load environment variables from the .env file
-env_path = "../../config/.env"
+env_path = "config/development.env"
 load_dotenv(env_path)
 
 # Database configuration
