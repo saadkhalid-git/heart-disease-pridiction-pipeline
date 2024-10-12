@@ -30,13 +30,6 @@ from ml_models.predictor import Predictor
 app = FastAPI()
 
 
-class FilterRequest(BaseModel):
-    search_text: str | None = None
-    column: str | None = None
-    start_date: str | None = None
-    end_date: str | None = None
-
-
 class PatientData(BaseModel):
     age: int
     gender: str
