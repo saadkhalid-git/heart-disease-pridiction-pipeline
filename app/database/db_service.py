@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqlalchemy import and_
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -18,12 +19,22 @@ class DBService:
             session.close()
 
     @staticmethod
-    def where(model_class, **kwargs):
+    def where(model_class, filters=None, page=1, page_size=10):
         session = Session()
         try:
-            query = session.query(model_class).filter_by(**kwargs)
+            query = session.query(model_class)
+
+            if filters:
+                # Apply all filter conditions combined with AND
+                query = query.filter(and_(*filters))
+
+            # Apply pagination
+            offset = (page - 1) * page_size
+            query = query.offset(offset).limit(page_size)
+
             results = query.all()
             return results
+
         finally:
             session.close()
 
