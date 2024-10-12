@@ -9,7 +9,14 @@ import requests
 import streamlit as st
 
 
-API_URL = os.getenv("API_URL") or "http://localhost:8000/"
+API_URL = os.getenv("API_URL", "http://localhost:8000/")
+BASE_URL = API_URL + "past-predictions"
+ITEMS_PER_PAGE = 10
+
+
+# Initialize session state
+st.session_state.setdefault("current_page", 1)
+st.session_state.setdefault("total_pages", 1)
 
 
 # Helper function to simulate loading state
@@ -19,19 +26,34 @@ def add_loading_state():
         st.success("Filters applied!")
 
 
-def fetch_data_from_api():
-    try:
-        response = requests.get(API_URL + "past-predictions")
-        response.raise_for_status()
+def fetch_data(params={}) -> pd.DataFrame:
+    """Fetch data from the FastAPI backend."""
+    response = requests.get(BASE_URL, params=params)
+    if response.status_code == 200:
         data = response.json()
-        return pd.DataFrame(data)
-    except requests.RequestException as e:
-        st.error(f"Error fetching data: {e}")
-        return pd.DataFrame()
+        if isinstance(data, list):
+            return pd.DataFrame(data)
+        else:
+            st.error("Unexpected data format received.")
+            return pd.DataFrame()
+
+    else:
+        st.error("Error fetching data")
+        return pd.DataFrame()  # Return an empty DataFrame instead of None
 
 
-def validate_csv_columns(df):
-    # Update the required columns to match the camel case format
+def display_data(df):
+    """Display the DataFrame in Streamlit."""
+    if df.empty:
+        st.warning("No data found for the applied filters.")
+    else:
+        df = reorder_columns(df)
+        df.columns = [snake_to_title(col) for col in df.columns]
+        st.dataframe(df, width=1500)
+
+
+def validate_csv_columns(df: pd.DataFrame) -> bool | str:
+    """Validate required CSV columns."""
     required_columns = {
         "Age",
         "Gender",
@@ -43,17 +65,16 @@ def validate_csv_columns(df):
         "MaxHR",
         "ExerciseAngina",
     }
+    missing_cols = required_columns - set(df.columns)
+    return (
+        True
+        if not missing_cols
+        else f"Missing required columns: {', '.join(missing_cols)}"
+    )
 
-    # Check if all required columns are present in the DataFrame
-    if required_columns.issubset(df.columns):
-        return True
-    else:
-        missing_cols = required_columns - set(df.columns)
-        return f"Missing required columns: {', '.join(missing_cols)}"
 
-
-def map_and_rename_columns(df):
-    # Define the mapping of old column names to new column names
+def map_and_rename_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Map and rename DataFrame columns."""
     column_mapping = {
         "Gender": "gender",
         "ChestPainType": "chest_pain_type",
@@ -66,6 +87,7 @@ def map_and_rename_columns(df):
         "ST_Slope": "st_slope",
         "FastingBS": "fasting_bs",
         "Age": "age",
+        "HeartDisease": "heart_disease",
     }
     desired_order = [
         "age",
@@ -79,16 +101,14 @@ def map_and_rename_columns(df):
         "exercise_angina",
         "old_peak",
         "st_slope",
+        "heart_disease",
     ]
-    # Rename the columns
     df.rename(columns=column_mapping, inplace=True)
-    df = df[list(column_mapping.values())]
-    df = df[desired_order]
-    # Return the modified DataFrame
-    return df
+    return df[desired_order]
 
 
-def reorder_columns(df):
+def reorder_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Reorder DataFrame columns."""
     column_order = [
         "age",
         "gender",
@@ -101,37 +121,31 @@ def reorder_columns(df):
         "exercise_angina",
         "old_peak",
         "st_slope",
+        "heart_disease",
     ]
-    df = df[column_order]
-    return df
+    if "created_at" in df.columns:
+        column_order.append("created_at")
+    return df[column_order]
 
 
-def snake_to_title(snake_str):
-    components = snake_str.split("_")
-    return " ".join(x.title() for x in components)
+def snake_to_title(snake_str: str) -> str:
+    """Convert snake_case string to Title Case."""
+    return " ".join(word.title() for word in snake_str.split("_"))
 
 
-# Function to make predictions
-def make_prediction(data):
-    # Example API URL (replace with your actual endpoint)
-    api_url = API_URL + "predict"
-
-    # Convert the data to JSON
-    print(data)
-    json_data = json.dumps(data)
-    # Send the request to the API
+def make_prediction(data: list) -> dict:
+    """Send prediction request to the API."""
     response = requests.post(
-        api_url, data=json_data, headers={"Content-Type": "application/json"}
+        API_URL + "predict",
+        json=data,  # Automatically handles JSON serialization
+        headers={"Content-Type": "application/json"},
     )
-
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return {"error": "Failed to get prediction from API"}
+    response.raise_for_status()  # Raise an error for bad responses
+    return response.json()
 
 
-def display_prediction_result(result):
-    print("resp->", result)
+def display_prediction_result(result: dict):
+    """Display prediction result in Streamlit."""
     if isinstance(result, pd.DataFrame):
         st.dataframe(result, use_container_width=True)
     else:
@@ -149,196 +163,140 @@ def display_prediction_result(result):
 def main():
     st.title("Heart Disease Prediction")
     history, predict = st.tabs(["Prediction History", "Making a Prediction"])
-    df = fetch_data_from_api()
+    df = fetch_data()
 
     with predict:
-        # Option Selection (above the table)
         option = st.selectbox(
             "Choose Prediction Type", ["Single Prediction", "Bulk Prediction"]
         )
-        # Option-specific content
+
         if option == "Single Prediction":
             with st.expander("Single Prediction Form", expanded=True):
-                age = st.number_input(
-                    "Age", min_value=0, max_value=120, value=25
-                )
-                gender = st.selectbox("Gender", ["M", "F"])
-                chest_pain = st.selectbox(
-                    "Chest Pain Type", ["ATA", "NAP", "ASY", "TA"]
-                )
-                resting_bp = st.number_input(
-                    "Resting BP", min_value=0, max_value=250, value=120
-                )
-                cholesterol = st.number_input(
-                    "Cholesterol", min_value=0, max_value=600, value=200
-                )
-                fasting_bs = st.number_input(
-                    "Fasting Blood Sugar > 120 mg/dl", value=0.0
-                )
-                resting_ecg = st.selectbox(
-                    "Resting ECG", ["Normal", "ST", "LVH"]
-                )
-                st_slope = st.selectbox("St Slope", ["Flat", "Up", "Down"])
-                max_hr = st.number_input(
-                    "Max HR", min_value=50, max_value=220, value=150
-                )
-                old_peak = st.number_input("Old Peak", value=1.0)
-                exercise_angina = st.selectbox(
-                    "Exercise Induced Angina", ["Y", "N"]
-                )
+                form_data = {
+                    "age": st.number_input(
+                        "Age", min_value=0, max_value=120, value=25
+                    ),
+                    "gender": st.selectbox("Gender", ["M", "F"]),
+                    "chest_pain_type": st.selectbox(
+                        "Chest Pain Type", ["ATA", "NAP", "ASY", "TA"]
+                    ),
+                    "resting_bp": st.number_input(
+                        "Resting BP", min_value=0, max_value=250, value=120
+                    ),
+                    "cholesterol": st.number_input(
+                        "Cholesterol", min_value=0, max_value=600, value=200
+                    ),
+                    "fasting_bs": st.number_input(
+                        "Fasting Blood Sugar > 120 mg/dl", value=0.0
+                    ),
+                    "resting_ecg": st.selectbox(
+                        "Resting ECG", ["Normal", "ST", "LVH"]
+                    ),
+                    "st_slope": st.selectbox(
+                        "St Slope", ["Flat", "Up", "Down"]
+                    ),
+                    "max_hr": st.number_input(
+                        "Max HR", min_value=50, max_value=220, value=150
+                    ),
+                    "old_peak": st.number_input("Old Peak", value=1.0),
+                    "exercise_angina": st.selectbox(
+                        "Exercise Induced Angina", ["Y", "N"]
+                    ),
+                }
+
                 if st.button("Submit Single Prediction"):
                     data = [
-                        {
-                            "age": age,
-                            "gender": gender,
-                            "chest_pain_type": chest_pain,
-                            "resting_bp": resting_bp,
-                            "cholesterol": cholesterol,
-                            "fasting_bs": fasting_bs,
-                            "resting_ecg": resting_ecg,
-                            "max_hr": max_hr,
-                            "exercise_angina": exercise_angina,
-                            "old_peak": old_peak,
-                            "st_slope": st_slope,
-                        },
-                    ]
-
+                        form_data
+                    ]  # Wrapping in a list for consistent format
                     with st.spinner("Making prediction..."):
                         result = make_prediction(data)
                         st.subheader("Prediction Result")
                         display_prediction_result(result)
 
         elif option == "Bulk Prediction":
-            option = "Bulk Prediction"
             uploaded_file = st.file_uploader("Upload CSV File", type="csv")
 
-            if uploaded_file is not None:
-                if st.button("Submit Bulk Prediction"):
-                    df = pd.read_csv(uploaded_file)
-
-                    if validate_csv_columns(df):
-                        df = map_and_rename_columns(df)
-                        data = df.to_dict(orient="records")
-
-                        with st.spinner("Making bulk predictions..."):
-                            result = make_prediction(data)
-                            st.subheader("Prediction Results")
-                            display_prediction_result(result)
+            if uploaded_file is not None and st.button(
+                "Submit Bulk Prediction"
+            ):
+                df = pd.read_csv(uploaded_file)
+                if validate_csv_columns(df) is True:
+                    df = map_and_rename_columns(df)
+                    data = df.to_dict(orient="records")
+                    with st.spinner("Making bulk predictions..."):
+                        result = make_prediction(data)
+                        st.subheader("Prediction Results")
+                        display_prediction_result(result)
 
     with history:
-        # Filter and Search Section
-        if df.empty:
+        if df is None or df.empty:
             st.warning(
                 "No data available. Please make a prediction to view history."
             )
-            return
-        df = reorder_columns(df)
-        df.columns = [snake_to_title(col) for col in df.columns]
-        with st.form(key="filter_form"):
-            col1, col2 = st.columns(2)
-            with col1:
+        else:
+            df = reorder_columns(df)
+            df.columns = [snake_to_title(col) for col in df.columns]
+
+            # Form for filtering
+            with st.form(key="filter_form"):
+                column_selection = st.selectbox(
+                    "Select Column for Search", options=df.columns
+                )
+                search_text = st.text_input("Search (any column)", "")
+
                 start_date = st.date_input("Start Date", value=None)
-            with col2:
                 end_date = st.date_input("End Date", value=None)
 
-            search_text = st.text_input("Search (any column)", "")
+                apply_filter = st.form_submit_button("Apply Filter")
+                print(apply_filter)
 
-            apply_filter = st.form_submit_button("Apply Filter")
-            if apply_filter:
-                # add_loading_state()
+            # Prepare request parameters
+            request_params = {
+                "search_text": search_text,
+                "column": column_selection.replace(" ", "_").lower(),
+                "start_date": start_date.isoformat() if start_date else None,
+                "end_date": end_date.isoformat() if end_date else None,
+                "page": st.session_state.current_page,
+                "page_size": ITEMS_PER_PAGE,
+            }
 
-                # # Make a request to the FastAPI endpoint for filtering
-                # response = requests.post(
-                #     "http://localhost:8000/filter",
-                #     json={
-                #         "search_text": search_text,
-                #         "start_date": start_date.isoformat()
-                #         if start_date
-                #         else None,
-                #         "end_date": end_date.isoformat() if end_date else None,
-                #     },
-                # )
-                # df_filtered = pd.DataFrame(response.json())
-
-                # Start filtering by search input
-                if search_text:
-                    df_filtered = df[
-                        df.apply(
-                            lambda row: row.astype(str)
-                            .str.contains(search_text, case=False)
-                            .any(),
-                            axis=1,
-                        )
-                    ]
-                else:
-                    df_filtered = df.copy()  # No search applied, show all
-
-                # Date filtering logic: You can implement
-
-                # your own logic for date-based
-                if start_date and end_date:
-                    st.write(
-                        f"Showing results for dates between {start_date} and {end_date}"
-                    )
-                else:
-                    st.write("No date filtering applied")
-
-                # Pagination setup
-                items_per_page = 10
-                total_pages = len(df_filtered) // items_per_page + (
-                    1 if len(df_filtered) % items_per_page > 0 else 0
-                )
-
-                # Select current page
-                if "current_page" not in st.session_state:
-                    st.session_state.current_page = 1
-
-                # Paginate dataframe
-                start_idx = (
-                    st.session_state.current_page - 1
-                ) * items_per_page
-                end_idx = start_idx + items_per_page
-                df_paginated = df_filtered[start_idx:end_idx]
-
-                st.write(df_paginated)
-
+            # Fetch initial data
+            data = fetch_data(request_params)
+            if df is None or df.empty:
+                st.warning("No data available for the applied filters.")
             else:
-                df_filtered = df.copy()  # No filtering applied initially
+                df_filtered = pd.DataFrame(data)
+                st.session_state.total_pages = data.get("total_pages", 1)
 
-        # Pagination setup
-        items_per_page = 10
-        total_pages = len(df_filtered) // items_per_page + (
-            1 if len(df_filtered) % items_per_page > 0 else 0
-        )
+                display_data(df_filtered)
 
-        # Select current page
-        if "current_page" not in st.session_state:
-            st.session_state.current_page = 1
+                # Pagination controls
+                col1, col2, col3 = st.columns([2, 6, 2])
+                pre_btn_cond = st.session_state.current_page > 1
+                with col1:
+                    if st.button("Previous") and pre_btn_cond:
+                        st.session_state.current_page -= 1
+                        request_params["page"] = st.session_state.current_page
+                        data = fetch_data(request_params)
+                        if df is None or df.empty:
+                            df_filtered = pd.DataFrame(data)
+                            st.session_state.total_pages = data.get(
+                                "total_pages", 1
+                            )
+                            display_data(df_filtered)
 
-        # Paginate dataframe
-        start_idx = (st.session_state.current_page - 1) * items_per_page
-        end_idx = start_idx + items_per_page
-        df_paginated = df_filtered[start_idx:end_idx]
-
-        # Show the DataTable with full page width
-        st.dataframe(df_paginated, width=1500)
-
-        # Update page on button click
-        col1, col2, col3 = st.columns(
-            [2, 6, 2]
-        )  # Adjusted column widths for button width
-        with col1:
-            if st.button("Previous"):
-                if st.session_state.current_page > 1:
-                    st.session_state.current_page -= 1
-        with col3:
-            if st.button("Next"):
-                if st.session_state.current_page < total_pages:
-                    st.session_state.current_page += 1
-
-        st.write(f"Page {st.session_state.current_page} of {total_pages}")
+                with col3:
+                    if st.button("Next"):
+                        st.session_state.current_page += 1
+                        request_params["page"] = st.session_state.current_page
+                        data = fetch_data(request_params)
+                        if df is None or df.empty:
+                            df_filtered = pd.DataFrame(data)
+                            st.session_state.total_pages = data.get(
+                                "total_pages", 1
+                            )
+                            display_data(df_filtered)
 
 
-# Run the app
 if __name__ == "__main__":
     main()

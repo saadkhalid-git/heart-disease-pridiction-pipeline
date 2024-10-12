@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from os.path import abspath
 from os.path import dirname
 from typing import Any
@@ -11,7 +12,9 @@ from typing import Optional
 import pandas as pd
 from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi import Query
 from pydantic import BaseModel
+from sqlalchemy import and_
 
 
 # Path appending
@@ -20,10 +23,18 @@ sys.path.append(d)
 
 from database.db_service import DBService
 from database.models.predictions import Predictions
+from database.connection_service import get_db_connection as database
 
 from ml_models.predictor import Predictor
 
 app = FastAPI()
+
+
+class FilterRequest(BaseModel):
+    search_text: str | None = None
+    column: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
 
 
 class PatientData(BaseModel):
@@ -42,6 +53,17 @@ class PatientData(BaseModel):
 
 data_store: list[PatientData] = []
 predictor = Predictor()
+
+
+def add_date_filter(filters, date_value, comparison, field_name):
+    """Helper function to parse date and add filter."""
+    try:
+        date = datetime.fromisoformat(date_value)
+        filters.append(comparison(field_name, date))
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
+        )
 
 
 def convert_patient_data_to_dataframe(patient_data_list):
@@ -79,13 +101,51 @@ def predict(data: list[PatientData]):
 
 
 @app.get("/past-predictions")
-async def get_past_predictions():
-    try:
-        # Fetch all past predictions from the database
-        past_predictions = DBService.where(Predictions)
+async def get_past_predictions(
+    search_text: str | None = None,
+    column: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    page: int | None = 1,
+    page_size: int | None = 10,
+):
+    filters = []
 
-        return past_predictions
+    # Add date filters if provided
+    if start_date:
+        add_date_filter(
+            filters,
+            start_date,
+            lambda field, date: Predictions.created_at >= date,
+            Predictions.created_at,
+        )
 
-    except Exception as e:
-        # Catch and return unexpected errors
-        raise HTTPException(status_code=500, detail=str(e))
+    if end_date:
+        add_date_filter(
+            filters,
+            end_date,
+            lambda field, date: Predictions.created_at <= date,
+            Predictions.created_at,
+        )
+
+    # Add column and search text filter if provided
+    if column and search_text:
+        if hasattr(Predictions, column):
+            filters.append(getattr(Predictions, column) == search_text)
+        else:
+            raise HTTPException(
+                status_code=400, detail=f"Column '{column}' does not exist."
+            )
+
+    # Fetch filtered past predictions from the database with pagination
+    past_predictions = DBService.where(
+        Predictions, filters, page=page, page_size=page_size
+    )
+
+    # Format created_at to string for the response
+    for prediction in past_predictions:
+        prediction.created_at = prediction.created_at.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+    return past_predictions
