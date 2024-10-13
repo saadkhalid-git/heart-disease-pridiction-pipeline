@@ -5,6 +5,8 @@
 Heat Disease Pridiction Pipeline
 The dependencies of the project are managed using Pipenv and Conda for a hassle-free setup and environment management.
 
+```![width-1600](https://github.com/user-attachments/assets/4bd362c8-f2fc-4996-acc4-3d991eb7b891)
+
 ## Prerequisites
 
 - Python 3.9
@@ -54,7 +56,7 @@ For development dependencies, run:
 
 ```bash
 pipenv install --dev
-```
+
 
 ### 4. Set Up PostgreSQL
 
